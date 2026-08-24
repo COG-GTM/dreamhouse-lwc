@@ -7,6 +7,13 @@ private with sharing class GeocodingServiceTest {
     private static final String COUNTRY = 'Spain';
     private static final Decimal LATITUDE = 3.123;
     private static final Decimal LONGITUDE = 31.333;
+    private static final String EXPECTED_ENDPOINT =
+        'callout:OpenStreetMap/search?format=json' +
+        '&street=Camino+del+Jueves+26' +
+        '&city=Armilla' +
+        '&state=Granada' +
+        '&country=Spain' +
+        '&postalcode=18100';
 
     @isTest
     static void successResponse() {
@@ -33,6 +40,33 @@ private with sharing class GeocodingServiceTest {
         Assert.areEqual(LATITUDE, computedCoordinates[0].lat);
         Assert.areEqual(LONGITUDE, computedCoordinates[0].lon);
     }
+
+    @isTest
+    static void emptyResultsResponse() {
+        // GIVEN
+        GeocodingService.GeocodingAddress address = new GeocodingService.GeocodingAddress();
+        address.street = STREET;
+        address.city = CITY;
+        address.postalcode = POSTAL_CODE;
+        address.state = STATE;
+        address.country = COUNTRY;
+
+        Test.setMock(
+            HttpCalloutMock.class,
+            new OpenStreetMapHttpCalloutMockImplEmpty()
+        );
+
+        // WHEN
+        List<GeocodingService.Coordinates> computedCoordinates = GeocodingService.geocodeAddresses(
+            new List<GeocodingService.GeocodingAddress>{ address }
+        );
+
+        // THEN
+        Assert.areEqual(1, computedCoordinates.size());
+        Assert.isNull(computedCoordinates[0].lat);
+        Assert.isNull(computedCoordinates[0].lon);
+    }
+
     @isTest
     static void blankAddress() {
         // GIVEN
@@ -81,9 +115,20 @@ private with sharing class GeocodingServiceTest {
 
     public class OpenStreetMapHttpCalloutMockImpl implements HttpCalloutMock {
         public HTTPResponse respond(HTTPRequest req) {
+            Assert.areEqual(EXPECTED_ENDPOINT, req.getEndpoint());
             HttpResponse res = new HttpResponse();
             res.setHeader('Content-Type', 'application/json');
             res.setBody('[{"lat": ' + LATITUDE + ',"lon": ' + LONGITUDE + '}]');
+            res.setStatusCode(200);
+            return res;
+        }
+    }
+
+    public class OpenStreetMapHttpCalloutMockImplEmpty implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setBody('[]');
             res.setStatusCode(200);
             return res;
         }

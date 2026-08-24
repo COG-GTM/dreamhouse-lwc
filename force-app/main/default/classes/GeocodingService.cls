@@ -1,6 +1,12 @@
 public with sharing class GeocodingService {
-    private static final String BASE_URL = 'https://nominatim.openstreetmap.org/search?format=json';
+    private static final String BASE_URL = 'callout:OpenStreetMap/search?format=json';
 
+    /**
+     * Invocable method that geocodes a list of addresses
+     * @param addresses List of addresses to geocode
+     * @return List of coordinates, one per input address. Coordinates are blank
+     * when the address is empty or when the geocoding service returns no match.
+     */
     @InvocableMethod(callout=true label='Geocode address')
     public static List<Coordinates> geocodeAddresses(
         List<GeocodingAddress> addresses
@@ -9,21 +15,11 @@ public with sharing class GeocodingService {
 
         for (GeocodingAddress address : addresses) {
             String geocodingUrl = BASE_URL;
-            geocodingUrl += (String.isNotBlank(address.street))
-                ? '&street=' + address.street
-                : '';
-            geocodingUrl += (String.isNotBlank(address.city))
-                ? '&city=' + address.city
-                : '';
-            geocodingUrl += (String.isNotBlank(address.state))
-                ? '&state=' + address.state
-                : '';
-            geocodingUrl += (String.isNotBlank(address.country))
-                ? '&country=' + address.country
-                : '';
-            geocodingUrl += (String.isNotBlank(address.postalcode))
-                ? '&postalcode=' + address.postalcode
-                : '';
+            geocodingUrl += buildParameter('street', address.street);
+            geocodingUrl += buildParameter('city', address.city);
+            geocodingUrl += buildParameter('state', address.state);
+            geocodingUrl += buildParameter('country', address.country);
+            geocodingUrl += buildParameter('postalcode', address.postalcode);
 
             Coordinates coords = new Coordinates();
             if (geocodingUrl != BASE_URL) {
@@ -37,17 +33,54 @@ public with sharing class GeocodingService {
                 );
                 HttpResponse response = http.send(request);
                 if (response.getStatusCode() == 200) {
-                    List<Coordinates> deserializedCoords = (List<Coordinates>) JSON.deserialize(
-                        response.getBody(),
-                        List<Coordinates>.class
+                    Coordinates firstMatch = getFirstMatch(response.getBody());
+                    if (firstMatch != null) {
+                        coords = firstMatch;
+                    }
+                } else {
+                    System.debug(
+                        LoggingLevel.ERROR,
+                        'Geocoding callout failed with status ' +
+                            response.getStatusCode() +
+                            ' ' +
+                            response.getStatus()
                     );
-                    coords = deserializedCoords[0];
                 }
             }
 
             computedCoordinates.add(coords);
         }
         return computedCoordinates;
+    }
+
+    private static String buildParameter(String name, String value) {
+        if (String.isBlank(value)) {
+            return '';
+        }
+        return '&' + name + '=' + EncodingUtil.urlEncode(value, 'UTF-8');
+    }
+
+    private static Coordinates getFirstMatch(String responseBody) {
+        if (String.isBlank(responseBody)) {
+            return null;
+        }
+        List<Coordinates> deserializedCoords;
+        try {
+            deserializedCoords = (List<Coordinates>) JSON.deserialize(
+                responseBody,
+                List<Coordinates>.class
+            );
+        } catch (JSONException e) {
+            System.debug(
+                LoggingLevel.ERROR,
+                'Failed to parse geocoding response: ' + e.getMessage()
+            );
+            return null;
+        }
+        if (deserializedCoords == null || deserializedCoords.isEmpty()) {
+            return null;
+        }
+        return deserializedCoords[0];
     }
 
     public class GeocodingAddress {
