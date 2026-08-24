@@ -10,7 +10,7 @@ public with sharing class FileUtilities {
             contentVersion.VersionData = EncodingUtil.base64Decode(base64data);
             contentVersion.Title = filename;
             contentVersion.PathOnClient = filename;
-            insert contentVersion;
+            Database.insert(contentVersion, AccessLevel.USER_MODE);
 
             contentVersion = [
                 SELECT ContentDocumentId
@@ -23,11 +23,14 @@ public with sharing class FileUtilities {
             contentDocumentLink.ContentDocumentId = contentVersion.ContentDocumentId;
             contentDocumentLink.LinkedEntityId = recordId;
             contentDocumentLink.ShareType = 'V';
-            insert contentDocumentLink;
+            Database.insert(contentDocumentLink, AccessLevel.USER_MODE);
 
             return contentDocumentLink.Id;
         } catch (Exception e) {
-            throw new AuraHandledException('Error creating file: ' + e);
+            String errorMessage = 'Error creating file: ' + e.getMessage();
+            AuraHandledException error = new AuraHandledException(errorMessage);
+            error.setMessage(errorMessage);
+            throw error;
         }
     }
 }
