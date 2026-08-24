@@ -1,14 +1,35 @@
 public with sharing class SampleDataController {
     @AuraEnabled
     public static void importSampleData() {
-        delete [SELECT Id FROM Case];
-        delete [SELECT Id FROM Property__c];
-        delete [SELECT Id FROM Broker__c];
-        delete [SELECT Id FROM Contact];
+        try {
+            deleteSampleData();
+            insertBrokers();
+            insertProperties();
+            insertContacts();
+        } catch (Exception e) {
+            throw new AuraHandledException(
+                'Failed to import sample data: ' + e.getMessage()
+            );
+        }
+    }
 
-        insertBrokers();
-        insertProperties();
-        insertContacts();
+    private static void deleteSampleData() {
+        Database.delete(
+            [SELECT Id FROM Case WITH USER_MODE],
+            AccessLevel.USER_MODE
+        );
+        Database.delete(
+            [SELECT Id FROM Property__c WITH USER_MODE],
+            AccessLevel.USER_MODE
+        );
+        Database.delete(
+            [SELECT Id FROM Broker__c WITH USER_MODE],
+            AccessLevel.USER_MODE
+        );
+        Database.delete(
+            [SELECT Id FROM Contact WITH USER_MODE],
+            AccessLevel.USER_MODE
+        );
     }
 
     private static void insertBrokers() {
@@ -16,13 +37,14 @@ public with sharing class SampleDataController {
             SELECT Id, Body
             FROM StaticResource
             WHERE Name = 'sample_data_brokers'
+            WITH USER_MODE
         ];
         String brokersJSON = brokersResource.body.toString();
         List<Broker__c> brokers = (List<Broker__c>) JSON.deserialize(
             brokersJSON,
             List<Broker__c>.class
         );
-        insert brokers;
+        Database.insert(brokers, AccessLevel.USER_MODE);
     }
 
     private static void insertProperties() {
@@ -30,6 +52,7 @@ public with sharing class SampleDataController {
             SELECT Id, Body
             FROM StaticResource
             WHERE Name = 'sample_data_properties'
+            WITH USER_MODE
         ];
         String propertiesJSON = propertiesResource.body.toString();
         List<Property__c> properties = (List<Property__c>) JSON.deserialize(
@@ -37,7 +60,7 @@ public with sharing class SampleDataController {
             List<Property__c>.class
         );
         randomizeDateListed(properties);
-        insert properties;
+        Database.insert(properties, AccessLevel.USER_MODE);
     }
 
     private static void insertContacts() {
@@ -45,13 +68,14 @@ public with sharing class SampleDataController {
             SELECT Id, Body
             FROM StaticResource
             WHERE Name = 'sample_data_contacts'
+            WITH USER_MODE
         ];
         String contactsJSON = contactsResource.body.toString();
         List<Contact> contacts = (List<Contact>) JSON.deserialize(
             contactsJSON,
             List<Contact>.class
         );
-        insert contacts;
+        Database.insert(contacts, AccessLevel.USER_MODE);
     }
 
     private static void randomizeDateListed(List<Property__c> properties) {
