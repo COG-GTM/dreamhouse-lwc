@@ -1,0 +1,8 @@
+{
+    "apiName": "Property__c",
+    "fields": {
+        "Price__c": { "displayValue": "$845,000", "value": 845000 },
+        "Status__c": { "displayValue": "Available", "value": "Available" }
+    },
+    "id": "a0Vaj00000ec4VAEAY"
+}
