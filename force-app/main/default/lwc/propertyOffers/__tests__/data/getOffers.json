@@ -1,0 +1,18 @@
+[
+    {
+        "Id": "a0Xaj0000000001AAA",
+        "Name": "OFF-0002",
+        "Buyer_Name__c": "Sam Lowball",
+        "Amount__c": 720000,
+        "Discount_Percent__c": 14.8,
+        "Status__c": "Needs Approval"
+    },
+    {
+        "Id": "a0Xaj0000000002AAA",
+        "Name": "OFF-0001",
+        "Buyer_Name__c": "Jane Buyer",
+        "Amount__c": 800000,
+        "Discount_Percent__c": 5.3,
+        "Status__c": "Submitted"
+    }
+]
