@@ -16,6 +16,9 @@ public with sharing class OfferService {
     public class OfferException extends Exception {
     }
 
+    // Status changes are only allowed through approve/accept/reject, never by direct edit.
+    private static Boolean statusChangeAllowed = false;
+
     /**
      * Percentage the offer is below the asking price (negative when above asking).
      */
@@ -34,14 +37,24 @@ public with sharing class OfferService {
         for (Offer__c offer : offers) {
             propertyIds.add(offer.Property__c);
         }
-        Map<Id, Property__c> properties = new Map<Id, Property__c>(
-            [
-                SELECT Id, Price__c, Status__c
-                FROM Property__c
-                WHERE Id IN :propertyIds
-                WITH SYSTEM_MODE
-            ]
-        );
+        Map<Id, Property__c> properties;
+        try {
+            properties = new Map<Id, Property__c>(
+                [
+                    SELECT Id, Price__c, Status__c
+                    FROM Property__c
+                    WHERE Id IN :propertyIds
+                    WITH USER_MODE
+                ]
+            );
+        } catch (QueryException e) {
+            for (Offer__c offer : offers) {
+                offer.addError(
+                    'You need access to the property asking price to submit offers.'
+                );
+            }
+            return;
+        }
 
         for (Offer__c offer : offers) {
             Property__c property = properties.get(offer.Property__c);
@@ -54,9 +67,11 @@ public with sharing class OfferService {
             if (property == null) {
                 continue;
             }
-            if (property.Status__c == PROPERTY_STATUS_CLOSED) {
+            if (!isOpenForOffers(property)) {
                 offer.addError(
-                    'Offers cannot be submitted on a closed property.'
+                    'Offers cannot be submitted on a property that is ' +
+                        property.Status__c +
+                        '.'
                 );
                 continue;
             }
@@ -69,6 +84,37 @@ public with sharing class OfferService {
                 ? STATUS_NEEDS_APPROVAL
                 : STATUS_SUBMITTED;
         }
+    }
+
+    /**
+     * Blocks direct edits that would bypass the approval rules.
+     */
+    public static void applyUpdateRules(
+        List<Offer__c> offers,
+        Map<Id, Offer__c> oldOffers
+    ) {
+        for (Offer__c offer : offers) {
+            Offer__c old = oldOffers.get(offer.Id);
+            if (
+                offer.Amount__c != old.Amount__c ||
+                offer.Discount_Percent__c != old.Discount_Percent__c
+            ) {
+                offer.addError(
+                    'An offer amount cannot be changed after submission. Submit a new offer instead.'
+                );
+            } else if (
+                offer.Status__c != old.Status__c && !statusChangeAllowed
+            ) {
+                offer.Status__c.addError(
+                    'Offer status can only be changed with the Approve, Accept and Reject actions.'
+                );
+            }
+        }
+    }
+
+    private static Boolean isOpenForOffers(Property__c property) {
+        return property.Status__c != PROPERTY_STATUS_CLOSED &&
+            property.Status__c != PROPERTY_STATUS_UNDER_AGREEMENT;
     }
 
     public static Offer__c approve(Id offerId) {
@@ -107,6 +153,21 @@ public with sharing class OfferService {
             );
         }
 
+        Property__c property = [
+            SELECT Id, Status__c
+            FROM Property__c
+            WHERE Id = :offer.Property__c
+            WITH SYSTEM_MODE
+            FOR UPDATE
+        ];
+        if (!isOpenForOffers(property)) {
+            throw new OfferException(
+                'Offers cannot be accepted on a property that is ' +
+                    property.Status__c +
+                    '.'
+            );
+        }
+
         List<Offer__c> toUpdate = new List<Offer__c>{
             new Offer__c(Id = offer.Id, Status__c = STATUS_ACCEPTED)
         };
@@ -127,7 +188,7 @@ public with sharing class OfferService {
                 new Offer__c(Id = other.Id, Status__c = STATUS_REJECTED)
             );
         }
-        update as user toUpdate;
+        updateStatuses(toUpdate);
 
         update as user new Property__c(
             Id = offer.Property__c,
@@ -151,9 +212,22 @@ public with sharing class OfferService {
 
     // Master-detail fields aren't updateable, so update only the status.
     private static Offer__c updateStatus(Offer__c offer, String status) {
-        update as user new Offer__c(Id = offer.Id, Status__c = status);
+        updateStatuses(
+            new List<Offer__c>{
+                new Offer__c(Id = offer.Id, Status__c = status)
+            }
+        );
         offer.Status__c = status;
         return offer;
+    }
+
+    private static void updateStatuses(List<Offer__c> offers) {
+        statusChangeAllowed = true;
+        try {
+            update as user offers;
+        } finally {
+            statusChangeAllowed = false;
+        }
     }
 
     private static Offer__c getOffer(Id offerId) {

@@ -72,9 +72,7 @@ private class TestOfferService {
         Test.stopTest();
 
         Assert.isFalse(result.isSuccess());
-        Assert.isTrue(
-            result.getErrors()[0].getMessage().contains('closed property')
-        );
+        Assert.isTrue(result.getErrors()[0].getMessage().contains('Closed'));
     }
 
     @isTest
@@ -151,5 +149,83 @@ private class TestOfferService {
             Assert.isTrue(e.getMessage().contains('already closed'));
         }
         Test.stopTest();
+    }
+
+    @isTest
+    static void testOfferOnUnderAgreementPropertyIsBlocked() {
+        Property__c property = createProperty(500000, 'Under Agreement');
+
+        Test.startTest();
+        Database.SaveResult result = Database.insert(
+            new Offer__c(
+                Property__c = property.Id,
+                Buyer_Name__c = 'Late Buyer',
+                Amount__c = 500000
+            ),
+            false
+        );
+        Test.stopTest();
+
+        Assert.isFalse(result.isSuccess());
+        Assert.isTrue(
+            result.getErrors()[0].getMessage().contains('Under Agreement')
+        );
+    }
+
+    @isTest
+    static void testCannotAcceptOfferAfterPropertyCloses() {
+        Property__c property = createProperty(500000, 'Available');
+        Offer__c offer = submit(property.Id, 490000);
+        property.Status__c = 'Closed';
+        update property;
+
+        Test.startTest();
+        try {
+            OfferService.accept(offer.Id);
+            Assert.fail('Expected OfferException');
+        } catch (OfferService.OfferException e) {
+            Assert.isTrue(e.getMessage().contains('Closed'));
+        }
+        Test.stopTest();
+
+        Assert.areEqual(
+            'Closed',
+            [SELECT Status__c FROM Property__c WHERE Id = :property.Id]
+            .Status__c
+        );
+    }
+
+    @isTest
+    static void testDirectStatusEditIsBlocked() {
+        Property__c property = createProperty(500000, 'Available');
+        Offer__c offer = submit(property.Id, 400000);
+
+        Test.startTest();
+        Database.SaveResult result = Database.update(
+            new Offer__c(Id = offer.Id, Status__c = 'Accepted'),
+            false
+        );
+        Test.stopTest();
+
+        Assert.isFalse(result.isSuccess());
+        Assert.areEqual(
+            'Needs Approval',
+            [SELECT Status__c FROM Offer__c WHERE Id = :offer.Id].Status__c
+        );
+    }
+
+    @isTest
+    static void testAmountEditIsBlocked() {
+        Property__c property = createProperty(500000, 'Available');
+        Offer__c offer = submit(property.Id, 480000);
+
+        Test.startTest();
+        Database.SaveResult result = Database.update(
+            new Offer__c(Id = offer.Id, Amount__c = 400000),
+            false
+        );
+        Test.stopTest();
+
+        Assert.isFalse(result.isSuccess());
     }
 }

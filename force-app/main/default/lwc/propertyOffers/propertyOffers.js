@@ -93,7 +93,10 @@ export default class PropertyOffers extends LightningElement {
     }
 
     get previewNeedsApproval() {
-        return this.previewPercent > APPROVAL_THRESHOLD_PERCENT;
+        // Same one-decimal rounding as OfferService.discountPercent.
+        const rounded =
+            Math.round((this.previewPercent + Number.EPSILON) * 10) / 10;
+        return rounded > APPROVAL_THRESHOLD_PERCENT;
     }
 
     get previewClass() {

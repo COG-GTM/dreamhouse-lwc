@@ -137,6 +137,24 @@ describe('c-property-offers', () => {
         ).not.toContain('needs broker approval');
     });
 
+    it('rounds like Apex at the approval threshold', async () => {
+        const element = createComponent();
+        getRecord.emit(mockProperty);
+        getOffers.emit([]);
+        await flushPromises();
+
+        // 10.04% below asking rounds to 10.0%, which does not need approval.
+        const amountInput =
+            element.shadowRoot.querySelectorAll('lightning-input')[1];
+        amountInput.value = 760162;
+        amountInput.dispatchEvent(new CustomEvent('change'));
+        await flushPromises();
+
+        const preview = element.shadowRoot.querySelector('.preview');
+        expect(preview.textContent).toContain('10.0% below asking');
+        expect(preview.textContent).not.toContain('needs broker approval');
+    });
+
     it('submits an offer and shows a warning toast when approval is needed', async () => {
         submitOffer.mockResolvedValue({ Status__c: 'Needs Approval' });
         const element = createComponent();

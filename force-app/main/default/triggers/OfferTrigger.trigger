@@ -1,3 +1,7 @@
-trigger OfferTrigger on Offer__c(before insert) {
-    OfferService.applySubmissionRules(Trigger.new);
+trigger OfferTrigger on Offer__c(before insert, before update) {
+    if (Trigger.isInsert) {
+        OfferService.applySubmissionRules(Trigger.new);
+    } else {
+        OfferService.applyUpdateRules(Trigger.new, Trigger.oldMap);
+    }
 }
