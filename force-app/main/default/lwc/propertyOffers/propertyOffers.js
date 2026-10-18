@@ -16,7 +16,7 @@ import STATUS_FIELD from '@salesforce/schema/Property__c.Status__c';
 import { reduceErrors } from 'c/ldsUtils';
 
 export const APPROVAL_THRESHOLD = 10;
-const CLOSED_PROPERTY_STATUSES = ['Closed', 'Under Agreement'];
+const CLOSED_PROPERTY_STATUSES = ['Contracted', 'Under Agreement', 'Closed'];
 const OPEN_OFFER_STATUSES = ['Submitted', 'Needs Approval', 'Approved'];
 const BADGE_CLASSES = {
     Submitted: 'slds-badge',

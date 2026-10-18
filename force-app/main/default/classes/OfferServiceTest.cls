@@ -20,6 +20,11 @@ public class OfferServiceTest {
                 Price__c = ASKING_PRICE,
                 Status__c = 'Under Agreement'
             ),
+            new Property__c(
+                Name = 'Contracted House',
+                Price__c = ASKING_PRICE,
+                Status__c = 'Contracted'
+            ),
             new Property__c(Name = 'Unpriced House', Status__c = 'Available')
         };
         System.runAs(new User(Id = UserInfo.getUserId())) {
@@ -217,6 +222,14 @@ public class OfferServiceTest {
             );
             Assert.isTrue(
                 submitExpectingError(
+                        propertyId('Contracted House'),
+                        'Late',
+                        800000
+                    )
+                    .contains('Contracted')
+            );
+            Assert.isTrue(
+                submitExpectingError(
                         propertyId('Unpriced House'),
                         'Early',
                         800000
@@ -324,6 +337,31 @@ public class OfferServiceTest {
             OfferService.STATUS_SUBMITTED,
             reload(offer.Id).Status__c
         );
+    }
+
+    @isTest
+    static void acceptRefusesContractedPropertyAndKeepsItsDate() {
+        Id openId = propertyId('Open House');
+        Offer__c offer = OfferService.submitOffer(openId, 'Jane Buyer', 820000);
+        Date contractDate = Date.today().addDays(-3);
+        update new Property__c(
+            Id = openId,
+            Status__c = 'Contracted',
+            Date_Agreement__c = contractDate
+        );
+        try {
+            OfferService.acceptOffer(offer.Id);
+            Assert.fail('Property is already contracted');
+        } catch (OfferService.OfferException e) {
+            Assert.isTrue(e.getMessage().contains('already Contracted'));
+        }
+        Property__c property = [
+            SELECT Status__c, Date_Agreement__c
+            FROM Property__c
+            WHERE Id = :openId
+        ];
+        Assert.areEqual('Contracted', property.Status__c);
+        Assert.areEqual(contractDate, property.Date_Agreement__c);
     }
 
     @isTest
