@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>Approve_Offers</name>
+    </customPermissions>
+    <description
+    >Broker add-on to the dreamhouse permission set: can approve offers more than 10% below asking.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>Dreamhouse Broker</label>
+</PermissionSet>
