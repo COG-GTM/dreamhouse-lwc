@@ -372,7 +372,7 @@ describe('c-property-offers', () => {
         expect(getOfferContext).toHaveBeenCalledTimes(2);
     });
 
-    it('refetches once when offers load with an outdated price', async () => {
+    it('refetches when the property changes while offers are loading', async () => {
         let resolveFirst;
         getOfferContext.mockReturnValueOnce(
             new Promise((resolve) => {
@@ -384,17 +384,38 @@ describe('c-property-offers', () => {
         });
         element.recordId = PROPERTY_ID;
         document.body.appendChild(element);
+        getOfferContext.mockResolvedValue(context({ askingPrice: 1000000 }));
         getRecord.emit(propertyRecord(1000000, 'Available'));
         await flushPromises();
-        expect(getOfferContext).toHaveBeenCalledTimes(1);
-
-        getOfferContext.mockResolvedValue(context({ askingPrice: 1000000 }));
         resolveFirst(context());
         await flushPromises();
-        expect(getOfferContext).toHaveBeenCalledTimes(2);
 
+        expect(getOfferContext).toHaveBeenCalledTimes(2);
         await typeOffer(element, 'Jane Buyer', '820000');
         expect(preview(element).textContent).toContain('18.0% below asking');
+    });
+
+    it('drops a pending refresh when the property changes back', async () => {
+        const element = await createComponent();
+        getRecord.emit(propertyRecord(845000, 'Available'));
+        await flushPromises();
+
+        let resolveIntermediate;
+        getOfferContext.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolveIntermediate = resolve;
+            })
+        );
+        getRecord.emit(propertyRecord(1000000, 'Available'));
+        getOfferContext.mockResolvedValue(context());
+        getRecord.emit(propertyRecord(845000, 'Available'));
+        await flushPromises();
+        resolveIntermediate(context({ askingPrice: 1000000 }));
+        await flushPromises();
+
+        expect(getOfferContext).toHaveBeenCalledTimes(3);
+        await typeOffer(element, 'Jane Buyer', '820000');
+        expect(preview(element).textContent.trim()).toBe('3.0% below asking');
     });
 
     it('shows an error panel when loading fails', async () => {

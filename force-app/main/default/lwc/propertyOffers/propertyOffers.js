@@ -71,6 +71,7 @@ export default class PropertyOffers extends LightningElement {
     isWorking = false;
     requestCounter = 0;
     propertyVersion;
+    pendingRequestId;
 
     @api
     get recordId() {
@@ -104,7 +105,11 @@ export default class PropertyOffers extends LightningElement {
             return;
         }
         this.propertyVersion = version;
-        if (this.context && contextVersion(this.context) !== version) {
+        const isLoading = this.pendingRequestId !== undefined;
+        if (
+            isLoading ||
+            (this.context && contextVersion(this.context) !== version)
+        ) {
             this.loadOffers();
         }
     }
@@ -112,6 +117,7 @@ export default class PropertyOffers extends LightningElement {
     async loadOffers(isRetry = false) {
         const requestId = ++this.requestCounter;
         const propertyId = this._recordId;
+        this.pendingRequestId = requestId;
         try {
             const context = await getOfferContext({ propertyId });
             if (requestId !== this.requestCounter) {
@@ -132,6 +138,10 @@ export default class PropertyOffers extends LightningElement {
             }
             this.context = undefined;
             this.error = error;
+        } finally {
+            if (this.pendingRequestId === requestId) {
+                this.pendingRequestId = undefined;
+            }
         }
     }
 
