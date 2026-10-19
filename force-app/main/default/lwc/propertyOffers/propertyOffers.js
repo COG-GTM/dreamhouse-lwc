@@ -104,10 +104,13 @@ export default class PropertyOffers extends LightningElement {
         if (version === this.propertyVersion) {
             return;
         }
+        const previousVersion = this.propertyVersion;
         this.propertyVersion = version;
-        const isLoading = this.pendingRequestId !== undefined;
+        const changedWhileLoading =
+            previousVersion !== undefined &&
+            this.pendingRequestId !== undefined;
         if (
-            isLoading ||
+            changedWhileLoading ||
             (this.context && contextVersion(this.context) !== version)
         ) {
             this.loadOffers();

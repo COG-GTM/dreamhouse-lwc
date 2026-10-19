@@ -395,6 +395,27 @@ describe('c-property-offers', () => {
         expect(preview(element).textContent).toContain('18.0% below asking');
     });
 
+    it('keeps the first load when the first property update matches it', async () => {
+        let resolveFirst;
+        getOfferContext.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolveFirst = resolve;
+            })
+        );
+        const element = createElement('c-property-offers', {
+            is: PropertyOffers
+        });
+        element.recordId = PROPERTY_ID;
+        document.body.appendChild(element);
+        getRecord.emit(propertyRecord(845000, 'Available'));
+        resolveFirst(context());
+        await flushPromises();
+
+        expect(getOfferContext).toHaveBeenCalledTimes(1);
+        expect(element.shadowRoot.querySelector('c-error-panel')).toBeNull();
+        expect(getOfferContext).toHaveBeenCalledTimes(1);
+    });
+
     it('drops a pending refresh when the property changes back', async () => {
         const element = await createComponent();
         getRecord.emit(propertyRecord(845000, 'Available'));
