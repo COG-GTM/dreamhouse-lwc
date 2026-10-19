@@ -62,6 +62,15 @@ function context(overrides = {}) {
     };
 }
 
+function propertyRecord(price, status) {
+    return {
+        fields: {
+            Price__c: { value: price },
+            Status__c: { value: status }
+        }
+    };
+}
+
 async function flushPromises() {
     for (let i = 0; i < 5; i++) {
         // eslint-disable-next-line no-await-in-loop
@@ -335,23 +344,17 @@ describe('c-property-offers', () => {
     });
 
     it('reloads offers when the asking price or status changes', async () => {
-        const record = (price, status) => ({
-            fields: {
-                Price__c: { value: price },
-                Status__c: { value: status }
-            }
-        });
         const element = await createComponent();
-        getRecord.emit(record(845000, 'Available'));
+        getRecord.emit(propertyRecord(845000, 'Available'));
         await flushPromises();
         expect(getOfferContext).toHaveBeenCalledTimes(1);
 
-        getRecord.emit(record(845000, 'Available'));
+        getRecord.emit(propertyRecord(845000, 'Available'));
         await flushPromises();
         expect(getOfferContext).toHaveBeenCalledTimes(1);
 
         getOfferContext.mockResolvedValue(context({ askingPrice: 1000000 }));
-        getRecord.emit(record(1000000, 'Available'));
+        getRecord.emit(propertyRecord(1000000, 'Available'));
         await flushPromises();
         expect(getOfferContext).toHaveBeenCalledTimes(2);
 
@@ -359,6 +362,39 @@ describe('c-property-offers', () => {
         expect(preview(element).textContent).toContain(
             '18.0% below asking, needs broker approval'
         );
+    });
+
+    it('reloads when the first property update differs from loaded offers', async () => {
+        await createComponent();
+        getOfferContext.mockResolvedValue(context({ askingPrice: 1000000 }));
+        getRecord.emit(propertyRecord(1000000, 'Available'));
+        await flushPromises();
+        expect(getOfferContext).toHaveBeenCalledTimes(2);
+    });
+
+    it('refetches once when offers load with an outdated price', async () => {
+        let resolveFirst;
+        getOfferContext.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolveFirst = resolve;
+            })
+        );
+        const element = createElement('c-property-offers', {
+            is: PropertyOffers
+        });
+        element.recordId = PROPERTY_ID;
+        document.body.appendChild(element);
+        getRecord.emit(propertyRecord(1000000, 'Available'));
+        await flushPromises();
+        expect(getOfferContext).toHaveBeenCalledTimes(1);
+
+        getOfferContext.mockResolvedValue(context({ askingPrice: 1000000 }));
+        resolveFirst(context());
+        await flushPromises();
+        expect(getOfferContext).toHaveBeenCalledTimes(2);
+
+        await typeOffer(element, 'Jane Buyer', '820000');
+        expect(preview(element).textContent).toContain('18.0% below asking');
     });
 
     it('shows an error panel when loading fails', async () => {

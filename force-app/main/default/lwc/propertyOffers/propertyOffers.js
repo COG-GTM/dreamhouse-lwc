@@ -54,6 +54,14 @@ export function percentBelowAsking(askingPrice, amount) {
     return ((diff < 0 ? -tenths : tenths) || 0) / 10;
 }
 
+function propertyVersion(price, status) {
+    return `${price ?? ''}|${status ?? ''}`;
+}
+
+function contextVersion(context) {
+    return propertyVersion(context.askingPrice, context.propertyStatus);
+}
+
 export default class PropertyOffers extends LightningElement {
     _recordId;
     context;
@@ -88,19 +96,20 @@ export default class PropertyOffers extends LightningElement {
         if (!data) {
             return;
         }
-        const version = [PRICE_FIELD, STATUS_FIELD]
-            .map(({ fieldApiName }) => data.fields[fieldApiName]?.value)
-            .join('|');
-        if (
-            this.propertyVersion !== undefined &&
-            version !== this.propertyVersion
-        ) {
-            this.loadOffers();
+        const version = propertyVersion(
+            data.fields[PRICE_FIELD.fieldApiName]?.value,
+            data.fields[STATUS_FIELD.fieldApiName]?.value
+        );
+        if (version === this.propertyVersion) {
+            return;
         }
         this.propertyVersion = version;
+        if (this.context && contextVersion(this.context) !== version) {
+            this.loadOffers();
+        }
     }
 
-    async loadOffers() {
+    async loadOffers(isRetry = false) {
         const requestId = ++this.requestCounter;
         const propertyId = this._recordId;
         try {
@@ -110,6 +119,13 @@ export default class PropertyOffers extends LightningElement {
             }
             this.context = context;
             this.error = undefined;
+            if (
+                !isRetry &&
+                this.propertyVersion !== undefined &&
+                contextVersion(context) !== this.propertyVersion
+            ) {
+                this.loadOffers(true);
+            }
         } catch (error) {
             if (requestId !== this.requestCounter) {
                 return;
