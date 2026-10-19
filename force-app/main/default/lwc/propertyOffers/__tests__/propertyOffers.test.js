@@ -1,7 +1,7 @@
 import { createElement } from '@lwc/engine-dom';
 import PropertyOffers, { percentBelowAsking } from 'c/propertyOffers';
 import { ShowToastEventName } from 'lightning/platformShowToastEvent';
-import { notifyRecordUpdateAvailable } from 'lightning/uiRecordApi';
+import { getRecord, notifyRecordUpdateAvailable } from 'lightning/uiRecordApi';
 import getOfferContext from '@salesforce/apex/OfferController.getOfferContext';
 import submitOffer from '@salesforce/apex/OfferController.submitOffer';
 import approveOffer from '@salesforce/apex/OfferController.approveOffer';
@@ -320,6 +320,45 @@ describe('c-property-offers', () => {
             propertyId: 'a0Vaj00000ec4VBEAY'
         });
         expect(card(element).title).toBe('Offers (1)');
+    });
+
+    it('clears the offer form when the record changes', async () => {
+        const element = await createComponent();
+        await typeOffer(element, 'Sam Lowball', '720000');
+
+        element.recordId = 'a0Vaj00000ec4VBEAY';
+        await flushPromises();
+
+        expect(input(element, 'Buyer name').value).toBe('');
+        expect(input(element, 'Offer amount').value).toBeUndefined();
+        expect(preview(element)).toBeNull();
+    });
+
+    it('reloads offers when the asking price or status changes', async () => {
+        const record = (price, status) => ({
+            fields: {
+                Price__c: { value: price },
+                Status__c: { value: status }
+            }
+        });
+        const element = await createComponent();
+        getRecord.emit(record(845000, 'Available'));
+        await flushPromises();
+        expect(getOfferContext).toHaveBeenCalledTimes(1);
+
+        getRecord.emit(record(845000, 'Available'));
+        await flushPromises();
+        expect(getOfferContext).toHaveBeenCalledTimes(1);
+
+        getOfferContext.mockResolvedValue(context({ askingPrice: 1000000 }));
+        getRecord.emit(record(1000000, 'Available'));
+        await flushPromises();
+        expect(getOfferContext).toHaveBeenCalledTimes(2);
+
+        await typeOffer(element, 'Jane Buyer', '820000');
+        expect(preview(element).textContent).toContain(
+            '18.0% below asking, needs broker approval'
+        );
     });
 
     it('shows an error panel when loading fails', async () => {

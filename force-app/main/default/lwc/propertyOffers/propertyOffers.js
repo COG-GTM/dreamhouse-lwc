@@ -1,6 +1,8 @@
-import { LightningElement, api } from 'lwc';
+import { LightningElement, api, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import { notifyRecordUpdateAvailable } from 'lightning/uiRecordApi';
+import { getRecord, notifyRecordUpdateAvailable } from 'lightning/uiRecordApi';
+import PRICE_FIELD from '@salesforce/schema/Property__c.Price__c';
+import STATUS_FIELD from '@salesforce/schema/Property__c.Status__c';
 import { reduceErrors } from 'c/ldsUtils';
 import getOfferContext from '@salesforce/apex/OfferController.getOfferContext';
 import submitOffer from '@salesforce/apex/OfferController.submitOffer';
@@ -60,6 +62,7 @@ export default class PropertyOffers extends LightningElement {
     amount;
     isWorking = false;
     requestCounter = 0;
+    propertyVersion;
 
     @api
     get recordId() {
@@ -69,9 +72,32 @@ export default class PropertyOffers extends LightningElement {
         const changed = value !== this._recordId;
         this._recordId = value;
         if (changed && value) {
+            this.buyerName = '';
+            this.amount = undefined;
+            this.propertyVersion = undefined;
             this.context = undefined;
             this.loadOffers();
         }
+    }
+
+    @wire(getRecord, {
+        recordId: '$recordId',
+        fields: [PRICE_FIELD, STATUS_FIELD]
+    })
+    wiredProperty({ data }) {
+        if (!data) {
+            return;
+        }
+        const version = [PRICE_FIELD, STATUS_FIELD]
+            .map(({ fieldApiName }) => data.fields[fieldApiName]?.value)
+            .join('|');
+        if (
+            this.propertyVersion !== undefined &&
+            version !== this.propertyVersion
+        ) {
+            this.loadOffers();
+        }
+        this.propertyVersion = version;
     }
 
     async loadOffers() {

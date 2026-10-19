@@ -78,7 +78,8 @@
                                                 value={offer.Amount__c}
                                                 format-style="currency"
                                                 currency-code="USD"
-                                                maximum-fraction-digits="0"
+                                                minimum-fraction-digits="2"
+                                                maximum-fraction-digits="2"
                                             ></lightning-formatted-number>
                                             <span class="slds-text-color_weak">
                                                 &nbsp;·&nbsp;{offer.percentLabel}

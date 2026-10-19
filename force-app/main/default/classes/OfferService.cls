@@ -249,6 +249,11 @@ public with sharing class OfferService {
     ) {
         for (Offer__c offer : offers) {
             Offer__c old = oldOffers.get(offer.Id);
+            if (offer.Property__c != old.Property__c) {
+                offer.Property__c.addError(
+                    'An offer cannot be moved to another property.'
+                );
+            }
             if (offer.Amount__c != old.Amount__c) {
                 offer.Amount__c.addError(
                     'The offer amount cannot be changed after submission.'
