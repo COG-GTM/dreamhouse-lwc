@@ -502,6 +502,12 @@
         </itemInstances>
         <itemInstances>
             <componentInstance>
+                <componentName>propertyOffers</componentName>
+                <identifier>c_propertyOffers</identifier>
+            </componentInstance>
+        </itemInstances>
+        <itemInstances>
+            <componentInstance>
                 <componentName>daysOnMarket</componentName>
                 <identifier>daysOnMarket</identifier>
                 <visibilityRule>
