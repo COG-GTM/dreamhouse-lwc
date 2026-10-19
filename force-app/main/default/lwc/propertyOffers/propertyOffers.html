@@ -81,6 +81,16 @@
                                 >{offer.Status__c}</span
                             >
                         </div>
+                        <template lwc:if={offer.showResubmitNote}>
+                            <p
+                                class="slds-text-body_small slds-text-color_error slds-var-m-top_xx-small"
+                                data-resubmit
+                            >
+                                The asking price changed and this offer is now
+                                more than 10% below asking. Reject it and submit
+                                a new offer for broker approval.
+                            </p>
+                        </template>
                         <div class="slds-var-m-top_x-small">
                             <template lwc:if={offer.showApprove}>
                                 <lightning-button

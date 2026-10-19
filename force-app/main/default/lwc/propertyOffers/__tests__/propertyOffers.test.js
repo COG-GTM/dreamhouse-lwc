@@ -77,12 +77,12 @@ function flushPromises() {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function render({ offers = [], canApprove = true, status } = {}) {
+async function render({ offers = [], canApprove = true, status, price } = {}) {
     getOfferContext.mockResolvedValue({ offers, canApprove });
     const element = createElement('c-property-offers', { is: PropertyOffers });
     element.recordId = PROPERTY_ID;
     document.body.appendChild(element);
-    getRecord.emit(propertyRecord(status));
+    getRecord.emit(propertyRecord(status, price));
     await flushPromises();
     return element;
 }
@@ -315,6 +315,21 @@ describe('c-property-offers', () => {
             element.shadowRoot.querySelector('c-error-panel')
         ).not.toBeNull();
         expect(element.shadowRoot.querySelector('.empty')).toBeNull();
+    });
+
+    it('hides Accept when a price increase means the offer needs approval', async () => {
+        const element = await render({ offers: [JANE], price: 1000000 });
+        expect(buttons(element, 'Accept')).toHaveLength(0);
+        expect(buttons(element, 'Reject')).toHaveLength(1);
+        expect(
+            element.shadowRoot.querySelector('[data-resubmit]')
+        ).not.toBeNull();
+    });
+
+    it('keeps Accept when the current price still allows it', async () => {
+        const element = await render({ offers: [JANE], price: 911100 });
+        expect(buttons(element, 'Accept')).toHaveLength(1);
+        expect(element.shadowRoot.querySelector('[data-resubmit]')).toBeNull();
     });
 
     it('reloads offers when the record changes', async () => {

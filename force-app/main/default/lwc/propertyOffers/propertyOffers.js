@@ -167,6 +167,12 @@ export default class PropertyOffers extends LightningElement {
         return this.offers.map((offer) => {
             const status = offer.Status__c;
             const isOpen = OPEN_OFFER_STATUSES.includes(status);
+            // Mirrors acceptOffer: a Submitted offer that the current asking
+            // price puts more than 10% below asking can't be accepted.
+            const needsResubmit =
+                status === 'Submitted' &&
+                percentBelowAsking(this.askingPrice, offer.Amount__c) >
+                    APPROVAL_THRESHOLD;
             return {
                 ...offer,
                 percentLabel: this.formatPercent(offer.Percent_Below_Asking__c),
@@ -177,7 +183,9 @@ export default class PropertyOffers extends LightningElement {
                     status === 'Needs Approval',
                 showAccept:
                     propertyOpen &&
+                    !needsResubmit &&
                     (status === 'Submitted' || status === 'Approved'),
+                showResubmitNote: propertyOpen && needsResubmit,
                 showReject: isOpen,
                 approveLabel: `Approve offer from ${offer.Buyer_Name__c}`,
                 acceptLabel: `Accept offer from ${offer.Buyer_Name__c}`,
