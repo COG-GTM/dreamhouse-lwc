@@ -308,6 +308,32 @@ private class OfferServiceTest {
     }
 
     @IsTest
+    static void acceptRechecksDiscountAgainstCurrentAskingPrice() {
+        Id propId = propertyId('Open House');
+        User agent = OfferTestFactory.getUser('agent');
+        Offer__c offer;
+        System.runAs(agent) {
+            offer = OfferService.submitOffer(propId, 'Early', 800000);
+        }
+        Assert.areEqual(OfferService.STATUS_SUBMITTED, offer.Status__c);
+        update new Property__c(Id = propId, Price__c = 1000000);
+        System.runAs(agent) {
+            try {
+                OfferService.acceptOffer(offer.Id);
+                Assert.fail('Discount is now more than 10% below asking');
+            } catch (OfferService.OfferException e) {
+                Assert.isTrue(
+                    e.getMessage().contains('asking price has changed')
+                );
+            }
+        }
+        Assert.areEqual(
+            OfferService.STATUS_SUBMITTED,
+            reload(offer.Id).Status__c
+        );
+    }
+
+    @IsTest
     static void cannotAcceptOnceThePropertyIsUnderAgreement() {
         Id propId = propertyId('Open House');
         System.runAs(OfferTestFactory.getUser('broker')) {

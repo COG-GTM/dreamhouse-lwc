@@ -118,6 +118,12 @@ describe('percentBelowAsking', () => {
         expect(percentBelowAsking(1000000, 899500)).toBe(10.1);
         expect(percentBelowAsking(1000000, 899600)).toBe(10);
         expect(percentBelowAsking(1000000, 1050000)).toBe(-5);
+        expect(percentBelowAsking(100, 100)).toBe(0);
+    });
+
+    it('stays exact just below the rounding boundary', () => {
+        expect(percentBelowAsking(99999999, 89949999.11)).toBe(10);
+        expect(percentBelowAsking(99999999, 89949999.1)).toBe(10.1);
     });
 
     it('returns null without a price or amount', () => {
@@ -309,6 +315,51 @@ describe('c-property-offers', () => {
             element.shadowRoot.querySelector('c-error-panel')
         ).not.toBeNull();
         expect(element.shadowRoot.querySelector('.empty')).toBeNull();
+    });
+
+    it('reloads offers when the record changes', async () => {
+        const element = await render({ offers: [JANE] });
+        expect(buttons(element, 'Accept')).toHaveLength(1);
+
+        getOfferContext.mockResolvedValue({ offers: [], canApprove: true });
+        element.recordId = 'a0Vother';
+        await flushPromises();
+
+        expect(getOfferContext).toHaveBeenLastCalledWith({
+            propertyId: 'a0Vother'
+        });
+        expect(element.shadowRoot.querySelector('lightning-card').title).toBe(
+            'Offers (0)'
+        );
+        expect(buttons(element, 'Accept')).toHaveLength(0);
+    });
+
+    it('ignores a slow response from an earlier request', async () => {
+        let resolveFirst;
+        getOfferContext.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolveFirst = resolve;
+            })
+        );
+        getOfferContext.mockResolvedValueOnce({
+            offers: [JANE],
+            canApprove: true
+        });
+        const element = createElement('c-property-offers', {
+            is: PropertyOffers
+        });
+        element.recordId = PROPERTY_ID;
+        document.body.appendChild(element);
+        getRecord.emit(propertyRecord());
+        element.recordId = 'a0Vother';
+        await flushPromises();
+
+        resolveFirst({ offers: [SAM, JANE], canApprove: true });
+        await flushPromises();
+
+        expect(element.shadowRoot.querySelector('lightning-card').title).toBe(
+            'Offers (1)'
+        );
     });
 
     it('is accessible', async () => {

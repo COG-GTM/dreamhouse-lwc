@@ -187,6 +187,21 @@ public with sharing class OfferService {
                 'Only submitted or approved offers can be accepted.'
             );
         }
+        // The asking price may have changed since submission; re-check the
+        // discount so a price edit can't skip broker approval.
+        if (
+            locked.offer.Status__c == STATUS_SUBMITTED &&
+            initialStatus(
+                percentBelowAsking(
+                    locked.property.Price__c,
+                    locked.offer.Amount__c
+                )
+            ) == STATUS_NEEDS_APPROVAL
+        ) {
+            throw new OfferException(
+                'The asking price has changed since this offer was submitted and it is now more than 10% below asking. Reject it and submit a new offer for broker approval.'
+            );
+        }
 
         List<Offer__c> updates = new List<Offer__c>{
             new Offer__c(Id = offerId, Status__c = STATUS_ACCEPTED)
@@ -324,7 +339,7 @@ public with sharing class OfferService {
             FOR UPDATE
         ];
         locked.offer = [
-            SELECT Id, Property__c, Status__c
+            SELECT Id, Property__c, Amount__c, Status__c
             FROM Offer__c
             WHERE Id = :offerId
             WITH USER_MODE

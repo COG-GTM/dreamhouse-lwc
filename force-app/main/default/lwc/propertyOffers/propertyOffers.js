@@ -38,13 +38,45 @@ export function percentBelowAsking(askingPrice, amount) {
     if (Number.isNaN(value)) {
         return null;
     }
-    const tenths = ((askingPrice - value) * 1000) / askingPrice;
-    const rounded = Math.round(Math.abs(tenths) + 1e-7) / 10;
-    return tenths < 0 ? -rounded : rounded;
+    // Whole cents and integer math keep the half-up rounding exact, like
+    // Apex Decimal arithmetic.
+    const askingCents = Math.round(askingPrice * 100);
+    const amountCents = Math.round(value * 100);
+    const numerator = Math.abs(askingCents - amountCents) * 2000 + askingCents;
+    const denominator = askingCents * 2;
+    let tenths = Math.floor(numerator / denominator);
+    if (tenths * denominator > numerator) {
+        tenths -= 1;
+    } else if ((tenths + 1) * denominator <= numerator) {
+        tenths += 1;
+    }
+    const rounded = tenths / 10;
+    return amountCents > askingCents && rounded !== 0 ? -rounded : rounded;
 }
 
 export default class PropertyOffers extends LightningElement {
-    @api recordId;
+    _recordId;
+    isConnected = false;
+    loadSequence = 0;
+
+    @api
+    get recordId() {
+        return this._recordId;
+    }
+    set recordId(value) {
+        if (value === this._recordId) {
+            return;
+        }
+        this._recordId = value;
+        this.offers = [];
+        this.canApprove = false;
+        this.loadError = undefined;
+        this.buyerName = '';
+        this.amount = null;
+        if (this.isConnected) {
+            this.loadOffers();
+        }
+    }
 
     offers = [];
     canApprove = false;
@@ -60,7 +92,12 @@ export default class PropertyOffers extends LightningElement {
     property;
 
     connectedCallback() {
+        this.isConnected = true;
         this.loadOffers();
+    }
+
+    disconnectedCallback() {
+        this.isConnected = false;
     }
 
     get askingPrice() {
@@ -159,17 +196,25 @@ export default class PropertyOffers extends LightningElement {
     }
 
     async loadOffers() {
-        if (!this.recordId) {
+        const propertyId = this.recordId;
+        if (!propertyId) {
             return;
         }
+        // Only the latest request may update the card, so a slow earlier
+        // response can't overwrite fresher offers or another property's.
+        const request = ++this.loadSequence;
         try {
-            const context = await getOfferContext({
-                propertyId: this.recordId
-            });
+            const context = await getOfferContext({ propertyId });
+            if (request !== this.loadSequence) {
+                return;
+            }
             this.offers = context.offers || [];
             this.canApprove = context.canApprove === true;
             this.loadError = undefined;
         } catch (error) {
+            if (request !== this.loadSequence) {
+                return;
+            }
             this.loadError = error;
             this.offers = [];
         }
