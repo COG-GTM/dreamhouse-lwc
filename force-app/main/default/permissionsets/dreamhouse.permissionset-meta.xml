@@ -57,6 +57,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>Offer__c.Approved_Percent_Below__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>Offer__c.Percent_Below_Asking__c</field>
         <readable>true</readable>
     </fieldPermissions>

@@ -10,6 +10,8 @@ public with sharing class OfferController {
         public Boolean acceptingOffers;
         @AuraEnabled
         public List<Offer__c> offers;
+        @AuraEnabled
+        public List<Id> approvalRequiredOfferIds = new List<Id>();
     }
 
     @AuraEnabled
@@ -38,6 +40,7 @@ public with sharing class OfferController {
                     Buyer_Name__c,
                     Amount__c,
                     Percent_Below_Asking__c,
+                    Approved_Percent_Below__c,
                     Status__c,
                     CreatedDate
                 FROM Offer__c
@@ -45,6 +48,18 @@ public with sharing class OfferController {
                 WITH USER_MODE
                 ORDER BY CreatedDate DESC, Name DESC
             ];
+            if (context.askingPrice != null && context.askingPrice > 0) {
+                for (Offer__c offer : context.offers) {
+                    if (
+                        OfferService.requiresApproval(
+                            offer,
+                            context.askingPrice
+                        )
+                    ) {
+                        context.approvalRequiredOfferIds.add(offer.Id);
+                    }
+                }
+            }
             return context;
         } catch (Exception e) {
             throw auraError(e);

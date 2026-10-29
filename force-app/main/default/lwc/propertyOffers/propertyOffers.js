@@ -102,18 +102,22 @@ export default class PropertyOffers extends LightningElement {
         const offers = this.context?.offers ?? [];
         const canApprove = this.context?.canApprove === true;
         const accepting = this.acceptingOffers;
+        const approvalRequiredIds = new Set(
+            this.context?.approvalRequiredOfferIds ?? []
+        );
         return offers.map((offer) => {
             const isOpen = accepting && OPEN_STATUSES.includes(offer.Status__c);
+            const approvalRequired =
+                offer.Status__c === 'Needs Approval' ||
+                approvalRequiredIds.has(offer.Id);
             return {
                 ...offer,
                 badgeClass: BADGE_CLASSES[offer.Status__c] ?? 'slds-badge',
                 percentLabel: this.formatPercent(offer.Percent_Below_Asking__c),
-                showApprove:
-                    isOpen &&
-                    canApprove &&
-                    offer.Status__c === 'Needs Approval',
+                showApprove: isOpen && canApprove && approvalRequired,
                 showAccept:
                     isOpen &&
+                    !approvalRequired &&
                     (offer.Status__c === 'Submitted' ||
                         offer.Status__c === 'Approved'),
                 showReject: isOpen,

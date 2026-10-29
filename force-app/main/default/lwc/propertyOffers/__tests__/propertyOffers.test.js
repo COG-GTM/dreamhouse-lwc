@@ -259,6 +259,25 @@ describe('c-property-offers', () => {
         ).not.toBeNull();
     });
 
+    it('asks for re-approval when the server flags an approved offer', async () => {
+        const approved = { ...SAM, Status__c: 'Approved' };
+        getOfferContext.mockResolvedValue(
+            context({
+                offers: [approved],
+                approvalRequiredOfferIds: [approved.Id]
+            })
+        );
+        const element = createComponent();
+        await flushPromises();
+
+        expect(
+            buttonByTitle(element, 'Approve offer from Sam Lowball')
+        ).not.toBeNull();
+        expect(
+            buttonByTitle(element, 'Accept offer from Sam Lowball')
+        ).toBeNull();
+    });
+
     it('approves, then accepts and refreshes the property record', async () => {
         const approved = { ...SAM, Status__c: 'Approved' };
         const accepted = { ...SAM, Status__c: 'Accepted' };

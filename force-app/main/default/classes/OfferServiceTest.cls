@@ -18,7 +18,11 @@ private class OfferServiceTest {
 
     private static Offer__c reload(Id offerId) {
         return [
-            SELECT Status__c, Amount__c, Percent_Below_Asking__c
+            SELECT
+                Status__c,
+                Amount__c,
+                Percent_Below_Asking__c,
+                Approved_Percent_Below__c
             FROM Offer__c
             WHERE Id = :offerId
         ];
@@ -343,6 +347,173 @@ private class OfferServiceTest {
     }
 
     @IsTest
+    static void submittedOfferPushedOverThresholdCanBeApproved() {
+        Offer__c jane;
+        System.runAs(OfferTestFactory.agent()) {
+            jane = OfferService.submitOffer(
+                property().Id,
+                'Jane Buyer',
+                820000
+            );
+        }
+        update new Property__c(Id = property().Id, Price__c = 950000);
+        System.runAs(OfferTestFactory.broker()) {
+            OfferService.approveOffer(jane.Id);
+            Assert.areEqual(13.7, reload(jane.Id).Approved_Percent_Below__c);
+            OfferService.acceptOffer(jane.Id);
+        }
+        Assert.areEqual(
+            OfferService.STATUS_ACCEPTED,
+            reload(jane.Id).Status__c
+        );
+    }
+
+    @IsTest
+    static void approvedOfferNeedsReapprovalWhenPriceRises() {
+        Offer__c sam;
+        System.runAs(OfferTestFactory.broker()) {
+            sam = OfferService.submitOffer(
+                property().Id,
+                'Sam Lowball',
+                720000
+            );
+            OfferService.approveOffer(sam.Id);
+        }
+        Assert.areEqual(14.8, reload(sam.Id).Approved_Percent_Below__c);
+        update new Property__c(Id = property().Id, Price__c = 900000);
+        System.runAs(OfferTestFactory.broker()) {
+            try {
+                OfferService.acceptOffer(sam.Id);
+                Assert.fail('Expected an exception');
+            } catch (OfferService.OfferException e) {
+                Assert.isTrue(e.getMessage().contains('20.0% below asking'));
+            }
+            OfferService.approveOffer(sam.Id);
+            Assert.areEqual(20.0, reload(sam.Id).Approved_Percent_Below__c);
+            OfferService.acceptOffer(sam.Id);
+        }
+        Assert.areEqual(OfferService.STATUS_ACCEPTED, reload(sam.Id).Status__c);
+    }
+
+    @IsTest
+    static void approvedOfferStillAcceptableWhenPriceDrops() {
+        Offer__c sam;
+        System.runAs(OfferTestFactory.broker()) {
+            sam = OfferService.submitOffer(
+                property().Id,
+                'Sam Lowball',
+                720000
+            );
+            OfferService.approveOffer(sam.Id);
+        }
+        update new Property__c(Id = property().Id, Price__c = 820000);
+        System.runAs(OfferTestFactory.agent()) {
+            OfferService.acceptOffer(sam.Id);
+        }
+        Assert.areEqual(OfferService.STATUS_ACCEPTED, reload(sam.Id).Status__c);
+    }
+
+    @IsTest
+    static void acceptRefusedWhenPropertyAlreadyHasAcceptedOffer() {
+        Offer__c jane;
+        Offer__c bob;
+        System.runAs(OfferTestFactory.agent()) {
+            jane = OfferService.submitOffer(
+                property().Id,
+                'Jane Buyer',
+                820000
+            );
+            OfferService.acceptOffer(jane.Id);
+        }
+        update new Property__c(Id = property().Id, Status__c = 'Available');
+        System.runAs(OfferTestFactory.agent()) {
+            bob = OfferService.submitOffer(property().Id, 'Bob Buyer', 830000);
+            try {
+                OfferService.acceptOffer(bob.Id);
+                Assert.fail('Expected an exception');
+            } catch (OfferService.OfferException e) {
+                Assert.isTrue(
+                    e.getMessage().contains('already has an accepted offer')
+                );
+            }
+        }
+        Assert.areEqual(
+            OfferService.STATUS_SUBMITTED,
+            reload(bob.Id).Status__c
+        );
+    }
+
+    @IsTest
+    static void triggerOnlyAllowsTheExactServiceWrite() {
+        Id propertyId = property().Id;
+        Offer__c sam = OfferService.submitOffer(
+            propertyId,
+            'Sam Lowball',
+            720000
+        );
+        Offer__c jane = OfferService.submitOffer(
+            propertyId,
+            'Jane Buyer',
+            820000
+        );
+        Offer__c old = sam.clone(true);
+
+        // Authorization for a different offer doesn't cover this one.
+        OfferService.authorizedUpdates.put(
+            jane.Id,
+            new Offer__c(Id = jane.Id, Status__c = OfferService.STATUS_REJECTED)
+        );
+        Offer__c approve = new Offer__c(
+            Id = sam.Id,
+            Amount__c = sam.Amount__c,
+            Percent_Below_Asking__c = sam.Percent_Below_Asking__c,
+            Status__c = OfferService.STATUS_APPROVED
+        );
+        OfferService.validateBeforeUpdate(
+            new List<Offer__c>{ approve },
+            new Map<Id, Offer__c>{ sam.Id => old }
+        );
+        Assert.isTrue(approve.hasErrors());
+
+        // A matching status with a different approval level is refused too.
+        OfferService.authorizedUpdates.put(
+            sam.Id,
+            new Offer__c(
+                Id = sam.Id,
+                Status__c = OfferService.STATUS_APPROVED,
+                Approved_Percent_Below__c = 14.8
+            )
+        );
+        Offer__c widened = approve.clone(true);
+        widened.Approved_Percent_Below__c = 90;
+        OfferService.validateBeforeUpdate(
+            new List<Offer__c>{ widened },
+            new Map<Id, Offer__c>{ sam.Id => old }
+        );
+        Assert.isTrue(widened.hasErrors());
+
+        // An insert that doesn't match the pending service insert is refused.
+        OfferService.authorizedInserts.add(
+            new Offer__c(
+                Property__c = propertyId,
+                Buyer_Name__c = 'Real',
+                Amount__c = 800000,
+                Percent_Below_Asking__c = 5.3,
+                Status__c = OfferService.STATUS_SUBMITTED
+            )
+        );
+        Offer__c sneaky = new Offer__c(
+            Property__c = propertyId,
+            Buyer_Name__c = 'Real',
+            Amount__c = 800000,
+            Percent_Below_Asking__c = 5.3,
+            Status__c = OfferService.STATUS_APPROVED
+        );
+        OfferService.validateBeforeInsert(new List<Offer__c>{ sneaky });
+        Assert.isTrue(sneaky.hasErrors());
+    }
+
+    @IsTest
     static void triggerBlocksDirectStatusAndAmountEdits() {
         Offer__c offer = OfferService.submitOffer(
             property().Id,
@@ -352,7 +523,8 @@ private class OfferServiceTest {
         Map<String, Object> edits = new Map<String, Object>{
             'Status__c' => OfferService.STATUS_APPROVED,
             'Amount__c' => 830000,
-            'Percent_Below_Asking__c' => 0
+            'Percent_Below_Asking__c' => 0,
+            'Approved_Percent_Below__c' => 50
         };
         for (String field : edits.keySet()) {
             Offer__c change = new Offer__c(Id = offer.Id);
@@ -426,7 +598,7 @@ private class OfferServiceTest {
         );
         Offer__c old = accepted.clone(true);
         old.Status__c = OfferService.STATUS_ACCEPTED;
-        OfferService.serviceDmlInProgress = true;
+        OfferService.authorizedUpdates.put(accepted.Id, accepted.clone(true));
         OfferService.validateBeforeUpdate(
             new List<Offer__c>{ accepted },
             new Map<Id, Offer__c>{ old.Id => old }

@@ -29,7 +29,11 @@ public with sharing class OfferService {
     };
 
     private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = new Map<String, Set<String>>{
-        STATUS_SUBMITTED => new Set<String>{ STATUS_ACCEPTED, STATUS_REJECTED },
+        STATUS_SUBMITTED => new Set<String>{
+            STATUS_APPROVED,
+            STATUS_ACCEPTED,
+            STATUS_REJECTED
+        },
         STATUS_NEEDS_APPROVAL => new Set<String>{
             STATUS_APPROVED,
             STATUS_REJECTED
@@ -37,8 +41,13 @@ public with sharing class OfferService {
         STATUS_APPROVED => new Set<String>{ STATUS_ACCEPTED, STATUS_REJECTED }
     };
 
+    // Exact offer writes the service is about to make. The trigger only lets
+    // through changes that match an entry, so other automation running inside
+    // the same transaction can't piggyback on the service's DML.
     @TestVisible
-    private static Boolean serviceDmlInProgress = false;
+    private static Map<Id, Offer__c> authorizedUpdates = new Map<Id, Offer__c>();
+    @TestVisible
+    private static List<Offer__c> authorizedInserts = new List<Offer__c>();
 
     public class OfferException extends Exception {
     }
@@ -60,6 +69,32 @@ public with sharing class OfferService {
 
     public static Boolean needsApproval(Decimal percentBelow) {
         return percentBelow > APPROVAL_THRESHOLD;
+    }
+
+    /**
+     * True when the offer needs a broker's approval before it can be accepted,
+     * judged against the property's current asking price.
+     */
+    public static Boolean requiresApproval(
+        Offer__c offer,
+        Decimal askingPrice
+    ) {
+        if (offer.Status__c == STATUS_NEEDS_APPROVAL) {
+            return true;
+        }
+        if (
+            offer.Status__c != STATUS_SUBMITTED &&
+            offer.Status__c != STATUS_APPROVED
+        ) {
+            return false;
+        }
+        Decimal current = percentBelowAsking(askingPrice, offer.Amount__c);
+        if (!needsApproval(current)) {
+            return false;
+        }
+        return offer.Status__c == STATUS_SUBMITTED ||
+            offer.Approved_Percent_Below__c == null ||
+            current > offer.Approved_Percent_Below__c;
     }
 
     public static Boolean canApprove() {
@@ -90,7 +125,7 @@ public with sharing class OfferService {
                 ? STATUS_NEEDS_APPROVAL
                 : STATUS_SUBMITTED
         );
-        runServiceDml(new List<SObject>{ offer }, true);
+        runServiceDml(new List<Offer__c>{ offer }, true);
         return offer;
     }
 
@@ -101,12 +136,29 @@ public with sharing class OfferService {
             );
         }
         Offer__c offer = lockOfferAndProperty(offerId);
-        if (offer.Status__c != STATUS_NEEDS_APPROVAL) {
+        Property__c property = lockedProperty;
+        if (!requiresApproval(offer, property.Price__c)) {
             throw new OfferException(
                 'Only offers that need approval can be approved.'
             );
         }
-        return setStatus(offer, STATUS_APPROVED);
+        Decimal current = percentBelowAsking(
+            property.Price__c,
+            offer.Amount__c
+        );
+        runServiceDml(
+            new List<Offer__c>{
+                new Offer__c(
+                    Id = offer.Id,
+                    Status__c = STATUS_APPROVED,
+                    Approved_Percent_Below__c = current
+                )
+            },
+            false
+        );
+        offer.Status__c = STATUS_APPROVED;
+        offer.Approved_Percent_Below__c = current;
+        return offer;
     }
 
     public static Offer__c rejectOffer(Id offerId) {
@@ -137,21 +189,29 @@ public with sharing class OfferService {
         ) {
             throw new OfferException('This offer is already closed.');
         }
-        if (offer.Status__c == STATUS_SUBMITTED) {
-            Decimal currentPercent = percentBelowAsking(
-                property.Price__c,
-                offer.Amount__c
+        if (requiresApproval(offer, property.Price__c)) {
+            throw new OfferException(
+                'The asking price has changed. This offer is now ' +
+                    percentBelowAsking(property.Price__c, offer.Amount__c) +
+                    '% below asking and needs broker approval.'
             );
-            if (needsApproval(currentPercent)) {
-                throw new OfferException(
-                    'The asking price has changed. This offer is now ' +
-                        currentPercent +
-                        '% below asking and needs broker approval.'
-                );
-            }
+        }
+        List<Offer__c> priorAcceptances = [
+            SELECT Buyer_Name__c
+            FROM Offer__c
+            WHERE Property__c = :property.Id AND Status__c = :STATUS_ACCEPTED
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        if (!priorAcceptances.isEmpty()) {
+            throw new OfferException(
+                'This property already has an accepted offer from ' +
+                    priorAcceptances[0].Buyer_Name__c +
+                    '.'
+            );
         }
 
-        List<SObject> updates = new List<SObject>{
+        List<Offer__c> updates = new List<Offer__c>{
             new Offer__c(Id = offer.Id, Status__c = STATUS_ACCEPTED)
         };
         for (Offer__c other : [
@@ -181,19 +241,38 @@ public with sharing class OfferService {
             Buyer_Name__c = offer.Buyer_Name__c,
             Amount__c = offer.Amount__c,
             Percent_Below_Asking__c = offer.Percent_Below_Asking__c,
+            Approved_Percent_Below__c = offer.Approved_Percent_Below__c,
             Status__c = STATUS_ACCEPTED
         );
     }
 
     public static void validateBeforeInsert(List<Offer__c> newOffers) {
-        if (serviceDmlInProgress) {
-            return;
-        }
         for (Offer__c offer : newOffers) {
-            offer.addError(
-                'Offers must be submitted from the Offers card on the property.'
-            );
+            if (!consumeAuthorizedInsert(offer)) {
+                offer.addError(
+                    'Offers must be submitted from the Offers card on the property.'
+                );
+            }
         }
+    }
+
+    private static Boolean consumeAuthorizedInsert(Offer__c offer) {
+        for (Integer i = 0; i < authorizedInserts.size(); i++) {
+            Offer__c expected = authorizedInserts[i];
+            if (
+                expected.Property__c == offer.Property__c &&
+                expected.Buyer_Name__c == offer.Buyer_Name__c &&
+                expected.Amount__c == offer.Amount__c &&
+                expected.Percent_Below_Asking__c ==
+                offer.Percent_Below_Asking__c &&
+                expected.Status__c == offer.Status__c &&
+                offer.Approved_Percent_Below__c == null
+            ) {
+                authorizedInserts.remove(i);
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void validateBeforeUpdate(
@@ -217,14 +296,27 @@ public with sharing class OfferService {
                     '% Below Asking cannot be changed after submission.'
                 );
             }
-            if (offer.Status__c == old.Status__c) {
+            Boolean statusChanged = offer.Status__c != old.Status__c;
+            Boolean approvalChanged =
+                offer.Approved_Percent_Below__c !=
+                old.Approved_Percent_Below__c;
+            if (!statusChanged && !approvalChanged) {
                 continue;
             }
+            Offer__c expected = authorizedUpdates.get(offer.Id);
             Set<String> allowed = ALLOWED_TRANSITIONS.get(old.Status__c);
-            if (!serviceDmlInProgress) {
+            if (
+                expected == null ||
+                expected.Status__c != offer.Status__c ||
+                (approvalChanged &&
+                expected.Approved_Percent_Below__c !=
+                offer.Approved_Percent_Below__c)
+            ) {
                 offer.Status__c.addError(
                     'Use Approve, Accept or Reject on the Offers card to change an offer status.'
                 );
+            } else if (!statusChanged) {
+                continue;
             } else if (allowed == null || !allowed.contains(offer.Status__c)) {
                 offer.Status__c.addError(
                     'An offer cannot move from ' +
@@ -274,6 +366,7 @@ public with sharing class OfferService {
                 Buyer_Name__c,
                 Amount__c,
                 Percent_Below_Asking__c,
+                Approved_Percent_Below__c,
                 Status__c
             FROM Offer__c
             WHERE Id = :offerId
@@ -294,7 +387,7 @@ public with sharing class OfferService {
 
     private static Offer__c setStatus(Offer__c offer, String status) {
         runServiceDml(
-            new List<SObject>{
+            new List<Offer__c>{
                 new Offer__c(Id = offer.Id, Status__c = status)
             },
             false
@@ -303,16 +396,23 @@ public with sharing class OfferService {
         return offer;
     }
 
-    private static void runServiceDml(List<SObject> records, Boolean isInsert) {
-        serviceDmlInProgress = true;
+    private static void runServiceDml(
+        List<Offer__c> records,
+        Boolean isInsert
+    ) {
         try {
             if (isInsert) {
+                authorizedInserts.addAll(records);
                 insert as user records;
             } else {
+                for (Offer__c record : records) {
+                    authorizedUpdates.put(record.Id, record);
+                }
                 update as user records;
             }
         } finally {
-            serviceDmlInProgress = false;
+            authorizedInserts.clear();
+            authorizedUpdates.clear();
         }
     }
 }

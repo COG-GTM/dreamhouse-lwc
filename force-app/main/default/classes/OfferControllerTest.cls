@@ -49,7 +49,14 @@ private class OfferControllerTest {
                 720000
             );
             Assert.areEqual('Needs Approval', sam.Status__c);
-            Assert.isTrue(OfferController.getOfferContext(propId).canApprove);
+            OfferController.OfferContext pending = OfferController.getOfferContext(
+                propId
+            );
+            Assert.isTrue(pending.canApprove);
+            Assert.areEqual(
+                new List<Id>{ sam.Id },
+                pending.approvalRequiredOfferIds
+            );
 
             Assert.areEqual(
                 'Approved',
