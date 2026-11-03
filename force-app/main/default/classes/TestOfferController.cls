@@ -134,7 +134,42 @@ private class TestOfferController {
             OfferController.submitOffer(property.Id, 'X'.repeat(200), 900);
             Assert.fail('Buyer name too long');
         } catch (AuraHandledException e) {
-            Assert.isFalse(e.getMessage().contains('Exception'));
+            Assert.areEqual(OfferController.GENERIC_ERROR, e.getMessage());
         }
+    }
+
+    @isTest
+    static void offerMustBelongToProperty() {
+        Property__c propertyA = TestOfferService.createProperty('Available');
+        Property__c propertyB = TestOfferService.createProperty('Available');
+        Id offerOnB = OfferService.submitOffer(propertyB.Id, 'B', 820000).Id;
+        try {
+            OfferController.acceptOffer(propertyA.Id, offerOnB);
+            Assert.fail('Mismatched property');
+        } catch (AuraHandledException e) {
+            Assert.areEqual(
+                'Offer not found on this property.',
+                e.getMessage()
+            );
+        }
+        Assert.areEqual(
+            'Available',
+            [SELECT Status__c FROM Property__c WHERE Id = :propertyB.Id]
+            .Status__c
+        );
+    }
+
+    @isTest
+    static void showsCurrentAndSubmittedDiscountAfterPriceChange() {
+        Property__c property = TestOfferService.createProperty('Available');
+        OfferService.submitOffer(property.Id, 'Jane Buyer', 820000);
+        update new Property__c(Id = property.Id, Price__c = 1000000);
+        OfferController.OfferRow row = OfferController.getOfferContext(
+                property.Id
+            )
+            .offers[0];
+        Assert.areEqual(18.0, row.percentBelowAsking);
+        Assert.areEqual(3.0, row.submittedPercentBelowAsking);
+        Assert.isTrue(row.requiresApproval);
     }
 }

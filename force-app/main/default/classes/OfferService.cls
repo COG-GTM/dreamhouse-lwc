@@ -57,11 +57,25 @@ public with sharing class OfferService {
             .setScale(1, RoundingMode.HALF_UP);
     }
 
-    public static Boolean requiresApproval(
+    /**
+     * The larger of the discount at submission and the discount at the current
+     * asking price, so lowering the price cannot bypass broker approval.
+     */
+    public static Decimal effectivePercentBelow(
         Offer__c offer,
         Decimal askingPrice
     ) {
         Decimal current = percentBelowAsking(askingPrice, offer.Amount__c);
+        return offer.Percent_Below_Asking__c == null
+            ? current
+            : Math.max(current, offer.Percent_Below_Asking__c);
+    }
+
+    public static Boolean requiresApproval(
+        Offer__c offer,
+        Decimal askingPrice
+    ) {
+        Decimal current = effectivePercentBelow(offer, askingPrice);
         if (current <= APPROVAL_THRESHOLD) {
             return false;
         }
@@ -119,18 +133,14 @@ public with sharing class OfferService {
                 'Only offers that need approval can be approved.'
             );
         }
-        Decimal current = percentBelowAsking(
-            property.Price__c,
-            offer.Amount__c
-        );
         writeOffers(
             new List<Offer__c>{
                 new Offer__c(
                     Id = offer.Id,
                     Status__c = STATUS_APPROVED,
-                    Approved_Percent_Below__c = Math.max(
-                        current,
-                        offer.Percent_Below_Asking__c
+                    Approved_Percent_Below__c = effectivePercentBelow(
+                        offer,
+                        property.Price__c
                     )
                 )
             }
@@ -153,7 +163,7 @@ public with sharing class OfferService {
         }
         if (requiresApproval(offer, property.Price__c)) {
             throw new OfferException(
-                'The asking price changed and this offer now needs broker approval before it can be accepted.'
+                'This offer needs broker approval at the current asking price before it can be accepted.'
             );
         }
         List<Offer__c> siblings = [
@@ -211,6 +221,7 @@ public with sharing class OfferService {
                 SELECT Id, Price__c, Status__c
                 FROM Property__c
                 WHERE Id IN :propertyIds
+                WITH USER_MODE
             ]
         );
         for (Offer__c offer : offers) {
@@ -283,6 +294,19 @@ public with sharing class OfferService {
                     'Offer status can only be changed with Approve, Accept or Reject.'
                 );
             }
+        }
+    }
+
+    /** Throws unless the offer belongs to the given property. */
+    public static void assertOfferOnProperty(Id propertyId, Id offerId) {
+        List<Offer__c> offers = [
+            SELECT Id
+            FROM Offer__c
+            WHERE Id = :offerId AND Property__c = :propertyId
+            WITH USER_MODE
+        ];
+        if (offers.isEmpty()) {
+            throw new OfferException('Offer not found on this property.');
         }
     }
 

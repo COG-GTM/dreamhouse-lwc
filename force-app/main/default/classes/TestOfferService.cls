@@ -337,7 +337,7 @@ public class TestOfferService {
                 OfferService.acceptOffer(offer.Id);
                 Assert.fail('Discount is now over the threshold');
             } catch (OfferService.OfferException e) {
-                Assert.isTrue(e.getMessage().contains('asking price changed'));
+                Assert.isTrue(e.getMessage().contains('current asking price'));
             }
             OfferService.approveOffer(offer.Id);
             Offer__c approved = reload(offer.Id);
@@ -349,12 +349,37 @@ public class TestOfferService {
                 OfferService.acceptOffer(offer.Id);
                 Assert.fail('Discount is past the approved level');
             } catch (OfferService.OfferException e) {
-                Assert.isTrue(e.getMessage().contains('asking price changed'));
+                Assert.isTrue(e.getMessage().contains('current asking price'));
             }
             OfferService.approveOffer(offer.Id);
             Assert.areEqual(20.0, reload(offer.Id).Approved_Percent_Below__c);
             OfferService.acceptOffer(offer.Id);
             Assert.areEqual('Accepted', reload(offer.Id).Status__c);
+        }
+    }
+
+    @isTest
+    static void priceDropDoesNotBypassApproval() {
+        Property__c property = createProperty('Available');
+        User agent = createUser(false);
+        System.runAs(agent) {
+            Offer__c offer = OfferService.submitOffer(
+                property.Id,
+                'Sam Lowball',
+                720000
+            );
+            update new Property__c(Id = property.Id, Price__c = 750000);
+            try {
+                OfferService.acceptOffer(offer.Id);
+                Assert.fail('Lowering the price must not skip approval');
+            } catch (OfferService.OfferException e) {
+                Assert.isTrue(e.getMessage().contains('broker approval'));
+            }
+            Assert.areEqual('Needs Approval', reload(offer.Id).Status__c);
+            Assert.areEqual(
+                14.8,
+                OfferService.effectivePercentBelow(reload(offer.Id), 750000)
+            );
         }
     }
 

@@ -426,6 +426,39 @@ describe('c-property-offers', () => {
         ).not.toBeNull();
     });
 
+    it('shows the current discount and the discount when submitted', async () => {
+        getOfferContext.mockResolvedValue(
+            context({
+                askingPrice: 1000000,
+                offers: [
+                    {
+                        ...JANE,
+                        percentBelowAsking: 18.0,
+                        submittedPercentBelowAsking: 3.0,
+                        requiresApproval: true
+                    },
+                    {
+                        ...SAM,
+                        id: 'a01000000000003AAA',
+                        buyerName: 'Max Over',
+                        amount: 1050000,
+                        percentBelowAsking: -5.0,
+                        submittedPercentBelowAsking: -5.0,
+                        status: 'Submitted',
+                        requiresApproval: false
+                    }
+                ]
+            })
+        );
+        const element = await createComponent();
+        const text = element.shadowRoot.textContent;
+        expect(text).toContain(
+            '18.0% below asking (3.0% below asking when submitted)'
+        );
+        expect(text).toContain('5.0% above asking');
+        expect(text).not.toContain('5.0% above asking (');
+    });
+
     it('hides the form on closed properties', async () => {
         getOfferContext.mockResolvedValue(
             context({ propertyStatus: 'Closed', offers: [JANE] })

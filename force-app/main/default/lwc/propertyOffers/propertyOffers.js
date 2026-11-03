@@ -28,6 +28,27 @@ const BADGE_CLASSES = {
  * Percent below asking in tenths of a percent, rounded half-up (away from zero)
  * on exact integer cents, matching Apex setScale(1, RoundingMode.HALF_UP).
  */
+function formatPercent(value) {
+    const number = Number(value);
+    return `${Math.abs(number).toFixed(1)}% ${number < 0 ? 'above' : 'below'} asking`;
+}
+
+function offerPercentText(row) {
+    const current = row.percentBelowAsking;
+    if (current === null || current === undefined) {
+        return '';
+    }
+    const submitted = row.submittedPercentBelowAsking;
+    if (
+        submitted === null ||
+        submitted === undefined ||
+        Number(submitted) === Number(current)
+    ) {
+        return formatPercent(current);
+    }
+    return `${formatPercent(current)} (${formatPercent(submitted)} when submitted)`;
+}
+
 export function percentBelowTenths(askingPrice, amount) {
     const askingCents = Math.round(Number(askingPrice) * 100);
     const amountCents = Math.round(Number(amount) * 100);
@@ -180,11 +201,7 @@ export default class PropertyOffers extends LightningElement {
                 showAccept: isOpen && !row.requiresApproval,
                 showReject: isOpen,
                 showApprovalHint: isOpen && !canApprove && row.requiresApproval,
-                percentText:
-                    row.percentBelowAsking === null ||
-                    row.percentBelowAsking === undefined
-                        ? ''
-                        : `${Number(row.percentBelowAsking).toFixed(1)}% below asking`,
+                percentText: offerPercentText(row),
                 approveTitle: `Approve offer from ${row.buyerName}`,
                 acceptTitle: `Accept offer from ${row.buyerName}`,
                 rejectTitle: `Reject offer from ${row.buyerName}`
