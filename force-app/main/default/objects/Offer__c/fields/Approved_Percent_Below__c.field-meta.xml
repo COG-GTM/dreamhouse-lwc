@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Approved_Percent_Below__c</fullName>
+    <description
+    >Discount level a broker approved. If the asking price changes and the discount grows past this level, the offer needs approval again.</description>
+    <externalId>false</externalId>
+    <label>Approved % Below Asking</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>1</scale>
+    <trackHistory>true</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

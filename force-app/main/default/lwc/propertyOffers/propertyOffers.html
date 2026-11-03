@@ -1,0 +1,121 @@
+<template>
+    <lightning-card title={cardTitle} icon-name="custom:custom18">
+        <div class="slds-var-p-horizontal_medium">
+            <template lwc:if={error}>
+                <p class="slds-text-color_error slds-m-bottom_small">{error}</p>
+            </template>
+            <template lwc:if={propertyOpen}>
+                <lightning-input
+                    label="Buyer name"
+                    value={buyerName}
+                    onchange={handleBuyerChange}
+                    required
+                ></lightning-input>
+                <lightning-input
+                    type="number"
+                    label="Offer amount"
+                    formatter="currency"
+                    step="0.01"
+                    value={amount}
+                    onchange={handleAmountChange}
+                    required
+                ></lightning-input>
+                <template lwc:if={hasPreview}>
+                    <p class={previewClass} data-id="preview">{previewText}</p>
+                </template>
+                <lightning-button
+                    variant="brand"
+                    label="Submit offer"
+                    onclick={handleSubmit}
+                    disabled={submitDisabled}
+                    class="slds-m-top_x-small slds-show"
+                ></lightning-button>
+            </template>
+            <template lwc:elseif={propertyClosedMessage}>
+                <p class="slds-text-color_weak" data-id="closed">
+                    {propertyClosedMessage}
+                </p>
+            </template>
+            <template lwc:if={hasOffers}>
+                <ul class="slds-m-top_medium slds-has-dividers_top-space">
+                    <template for:each={offers} for:item="offer">
+                        <li
+                            key={offer.id}
+                            class="slds-item slds-p-vertical_x-small"
+                            data-buyer={offer.buyerName}
+                        >
+                            <div class="slds-grid slds-grid_align-spread">
+                                <span class="slds-text-title_bold"
+                                    >{offer.buyerName}</span
+                                >
+                                <span class={offer.badgeClass}
+                                    >{offer.status}</span
+                                >
+                            </div>
+                            <div class="slds-text-body_small">
+                                <lightning-formatted-number
+                                    value={offer.amount}
+                                    format-style="currency"
+                                    currency-code="USD"
+                                    minimum-fraction-digits="2"
+                                    maximum-fraction-digits="2"
+                                ></lightning-formatted-number>
+                                <span class="slds-text-color_weak">
+                                    · {offer.percentText}</span
+                                >
+                            </div>
+                            <template lwc:if={offer.showApprovalHint}>
+                                <p
+                                    class="slds-text-body_small slds-text-color_weak"
+                                >
+                                    Waiting for broker approval
+                                </p>
+                            </template>
+                            <div class="slds-m-top_xx-small">
+                                <template lwc:if={offer.showApprove}>
+                                    <lightning-button
+                                        label="Approve"
+                                        title={offer.approveTitle}
+                                        data-id={offer.id}
+                                        data-buyer={offer.buyerName}
+                                        onclick={handleApprove}
+                                        disabled={isBusy}
+                                        class="slds-m-right_xx-small"
+                                    ></lightning-button>
+                                </template>
+                                <template lwc:if={offer.showAccept}>
+                                    <lightning-button
+                                        variant="success"
+                                        label="Accept"
+                                        title={offer.acceptTitle}
+                                        data-id={offer.id}
+                                        data-buyer={offer.buyerName}
+                                        onclick={handleAccept}
+                                        disabled={isBusy}
+                                        class="slds-m-right_xx-small"
+                                    ></lightning-button>
+                                </template>
+                                <template lwc:if={offer.showReject}>
+                                    <lightning-button
+                                        variant="destructive-text"
+                                        label="Reject"
+                                        title={offer.rejectTitle}
+                                        data-id={offer.id}
+                                        data-buyer={offer.buyerName}
+                                        onclick={handleReject}
+                                        disabled={isBusy}
+                                    ></lightning-button>
+                                </template>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+            </template>
+            <template lwc:elseif={context}>
+                <p class="slds-text-color_weak slds-m-top_small">
+                    No offers yet.
+                </p>
+            </template>
+        </div>
+    </lightning-card>
+</template>
