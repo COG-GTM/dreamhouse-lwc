@@ -92,6 +92,7 @@ public with sharing class OfferService {
             WHERE Id = :propertyId
             WITH USER_MODE
             LIMIT 1
+            FOR UPDATE
         ];
         if (properties.isEmpty()) {
             throw new OfferException('Property not found.');
