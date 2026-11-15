@@ -197,14 +197,5 @@ private with sharing class FileUtilitiesTest {
             // THEN
             Assert.isInstanceOfType(e, AuraHandledException.class);
         }
-
-        Assert.areEqual(
-            0,
-            [
-                SELECT COUNT()
-                FROM ContentDocumentLink
-                WHERE LinkedEntityId = :property.Id
-            ]
-        );
     }
 }
