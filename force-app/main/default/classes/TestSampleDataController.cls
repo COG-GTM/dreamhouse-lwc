@@ -36,10 +36,52 @@ private class TestSampleDataController {
         );
     }
 
+    private static User createUser(String profileName, Boolean dreamhouse) {
+        String unique = String.valueOf(Crypto.getRandomInteger()).remove('-');
+        User user = new User(
+            ProfileId = [SELECT Id FROM Profile WHERE Name = :profileName]
+            .Id,
+            Username = 'sampledata' + unique + '@dreamhouse.test',
+            Email = 'sampledata' + unique + '@dreamhouse.test',
+            LastName = 'Importer',
+            Alias = unique.left(8),
+            TimeZoneSidKey = 'America/Los_Angeles',
+            LocaleSidKey = 'en_US',
+            EmailEncodingKey = 'UTF-8',
+            LanguageLocaleKey = 'en_US'
+        );
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            insert user;
+            if (dreamhouse) {
+                insert new PermissionSetAssignment(
+                    AssigneeId = user.Id,
+                    PermissionSetId = [
+                        SELECT Id
+                        FROM PermissionSet
+                        WHERE Name = 'dreamhouse'
+                    ]
+                    .Id
+                );
+            }
+        }
+        return user;
+    }
+
+    private static User dreamhouseUser() {
+        return createUser('Standard User', true);
+    }
+
+    private static void importAs(User user) {
+        System.runAs(user) {
+            SampleDataController.importSampleData();
+        }
+    }
+
     @isTest
     static void importSampleData_emptyOrg_createsAllSampleRecords() {
+        User importer = dreamhouseUser();
         Test.startTest();
-        SampleDataController.importSampleData();
+        importAs(importer);
         Test.stopTest();
 
         Assert.areEqual(
@@ -124,9 +166,10 @@ private class TestSampleDataController {
 
         Case existingCase = new Case(Subject = 'Existing case');
         insert existingCase;
+        User importer = dreamhouseUser();
 
         Test.startTest();
-        SampleDataController.importSampleData();
+        importAs(importer);
         Test.stopTest();
 
         Map<Id, Broker__c> brokers = new Map<Id, Broker__c>(
@@ -293,7 +336,8 @@ private class TestSampleDataController {
 
     @isTest
     static void importSampleData_runTwice_keepsFirstImportAndAddsNothing() {
-        SampleDataController.importSampleData();
+        User importer = dreamhouseUser();
+        importAs(importer);
         Map<Id, Property__c> firstImport = new Map<Id, Property__c>(
             [SELECT Id, Date_Listed__c FROM Property__c]
         );
@@ -301,7 +345,7 @@ private class TestSampleDataController {
         Integer contactCount = [SELECT COUNT() FROM Contact];
 
         Test.startTest();
-        SampleDataController.importSampleData();
+        importAs(importer);
         Test.stopTest();
 
         Map<Id, Property__c> afterSecondImport = new Map<Id, Property__c>(
@@ -329,5 +373,56 @@ private class TestSampleDataController {
             [SELECT COUNT() FROM Contact],
             'A second import must not add contacts.'
         );
+    }
+
+    @isTest
+    static void importSampleData_recordsHiddenBySharing_areNotDuplicated() {
+        List<Contact> ownedByAnotherUser = sampleContacts();
+        insert ownedByAnotherUser;
+        User importer = dreamhouseUser();
+        System.runAs(importer) {
+            Assert.areEqual(
+                0,
+                [SELECT COUNT() FROM Contact],
+                'Precondition: the importer cannot see the other owner\'s contacts.'
+            );
+        }
+
+        Test.startTest();
+        importAs(importer);
+        Test.stopTest();
+
+        Assert.areEqual(
+            ownedByAnotherUser.size(),
+            [SELECT COUNT() FROM Contact],
+            'Sample contacts the importer cannot see must not be inserted again.'
+        );
+        Assert.areEqual(
+            0,
+            [SELECT COUNT() FROM Contact WHERE OwnerId = :importer.Id],
+            'The importer should not have created any contacts.'
+        );
+    }
+
+    @isTest
+    static void importSampleData_userWithoutObjectAccess_isRejected() {
+        User restricted = createUser('Minimum Access - Salesforce', false);
+        Exception caught;
+
+        Test.startTest();
+        try {
+            importAs(restricted);
+        } catch (Exception e) {
+            caught = e;
+        }
+        Test.stopTest();
+
+        Assert.isNotNull(
+            caught,
+            'A user without create access must not be able to import.'
+        );
+        Assert.areEqual(0, [SELECT COUNT() FROM Broker__c], 'No brokers.');
+        Assert.areEqual(0, [SELECT COUNT() FROM Property__c], 'No properties.');
+        Assert.areEqual(0, [SELECT COUNT() FROM Contact], 'No contacts.');
     }
 }

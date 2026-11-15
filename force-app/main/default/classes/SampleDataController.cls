@@ -2,13 +2,21 @@
  * Imports the Dreamhouse sample data without touching existing records: a
  * sample record that already exists (matched by its natural key) is skipped,
  * and nothing is ever updated or deleted, so the import is safe in a shared org.
+ * Inserts run in user mode; the existence checks ignore sharing so records the
+ * running user cannot see are still recognised and not duplicated.
  */
 public with sharing class SampleDataController {
     @AuraEnabled
     public static void importSampleData() {
-        Map<Decimal, Id> brokerIdsBySampleId = insertMissingBrokers();
-        insertMissingProperties(brokerIdsBySampleId);
-        insertMissingContacts();
+        Savepoint savepoint = Database.setSavepoint();
+        try {
+            Map<Decimal, Id> brokerIdsBySampleId = insertMissingBrokers();
+            insertMissingProperties(brokerIdsBySampleId);
+            insertMissingContacts();
+        } catch (Exception e) {
+            Database.rollback(savepoint);
+            throw e;
+        }
     }
 
     private static Map<Decimal, Id> insertMissingBrokers() {
@@ -26,12 +34,10 @@ public with sharing class SampleDataController {
 
         Map<Decimal, Id> existingIdsBySampleId = new Map<Decimal, Id>();
         Map<String, Id> existingIdsByEmail = new Map<String, Id>();
-        for (Broker__c existing : [
-            SELECT Id, Broker_Id__c, Email__c
-            FROM Broker__c
-            WHERE Broker_Id__c IN :sampleIds OR Email__c IN :emails
-            ORDER BY CreatedDate
-        ]) {
+        for (
+            Broker__c existing : new ExistingSampleRecords()
+                .brokers(sampleIds, emails)
+        ) {
             if (
                 existing.Broker_Id__c != null &&
                 !existingIdsBySampleId.containsKey(existing.Broker_Id__c)
@@ -57,7 +63,7 @@ public with sharing class SampleDataController {
                 brokersToInsert.add(broker);
             }
         }
-        insert brokersToInsert;
+        insert as user brokersToInsert;
         for (Broker__c broker : brokersToInsert) {
             brokerIdsBySampleId.put(broker.Broker_Id__c, broker.Id);
         }
@@ -77,11 +83,9 @@ public with sharing class SampleDataController {
             names.add(property.Name);
         }
         Set<String> existingKeys = new Set<String>();
-        for (Property__c existing : [
-            SELECT Name, Address__c
-            FROM Property__c
-            WHERE Name IN :names
-        ]) {
+        for (
+            Property__c existing : new ExistingSampleRecords().properties(names)
+        ) {
             existingKeys.add(propertyKey(existing));
         }
 
@@ -90,16 +94,22 @@ public with sharing class SampleDataController {
             if (existingKeys.contains(propertyKey(property))) {
                 continue;
             }
+            Property__c toInsert = new Property__c();
+            Map<String, Object> fields = property.getPopulatedFieldsAsMap();
+            for (String field : fields.keySet()) {
+                if (field != 'Broker__r') {
+                    toInsert.put(field, fields.get(field));
+                }
+            }
             if (property.Broker__r != null) {
-                property.Broker__c = brokerIdsBySampleId.get(
+                toInsert.Broker__c = brokerIdsBySampleId.get(
                     property.Broker__r.Broker_Id__c
                 );
-                property.Broker__r = null;
             }
-            propertiesToInsert.add(property);
+            propertiesToInsert.add(toInsert);
         }
         randomizeDateListed(propertiesToInsert);
-        insert propertiesToInsert;
+        insert as user propertiesToInsert;
     }
 
     private static void insertMissingContacts() {
@@ -113,11 +123,7 @@ public with sharing class SampleDataController {
             emails.add(contact.Email);
         }
         Set<String> existingEmails = new Set<String>();
-        for (Contact existing : [
-            SELECT Email
-            FROM Contact
-            WHERE Email IN :emails
-        ]) {
+        for (Contact existing : new ExistingSampleRecords().contacts(emails)) {
             existingEmails.add(normalize(existing.Email));
         }
 
@@ -127,7 +133,7 @@ public with sharing class SampleDataController {
                 contactsToInsert.add(contact);
             }
         }
-        insert contactsToInsert;
+        insert as user contactsToInsert;
     }
 
     private static Object loadSampleData(
@@ -154,6 +160,32 @@ public with sharing class SampleDataController {
         for (Property__c property : properties) {
             property.Date_Listed__c =
                 System.today() - Integer.valueof((Math.random() * 90));
+        }
+    }
+
+    private without sharing class ExistingSampleRecords {
+        public List<Broker__c> brokers(
+            Set<Decimal> sampleIds,
+            Set<String> emails
+        ) {
+            return [
+                SELECT Id, Broker_Id__c, Email__c
+                FROM Broker__c
+                WHERE Broker_Id__c IN :sampleIds OR Email__c IN :emails
+                ORDER BY CreatedDate
+            ];
+        }
+
+        public List<Property__c> properties(Set<String> names) {
+            return [
+                SELECT Name, Address__c
+                FROM Property__c
+                WHERE Name IN :names
+            ];
+        }
+
+        public List<Contact> contacts(Set<String> emails) {
+            return [SELECT Email FROM Contact WHERE Email IN :emails];
         }
     }
 }
