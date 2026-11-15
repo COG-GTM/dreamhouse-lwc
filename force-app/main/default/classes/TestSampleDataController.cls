@@ -52,15 +52,43 @@ private class TestSampleDataController {
 
     @isTest
     static void importSampleDataLinksPropertiesToBrokers() {
+        StaticResource propertiesResource = [
+            SELECT Body
+            FROM StaticResource
+            WHERE Name = 'sample_data_properties'
+        ];
+        Map<String, Decimal> expectedBrokerIdByProperty = new Map<String, Decimal>();
+        for (
+            Object sample : (List<Object>) JSON.deserializeUntyped(
+                propertiesResource.Body.toString()
+            )
+        ) {
+            Map<String, Object> property = (Map<String, Object>) sample;
+            Map<String, Object> broker = (Map<String, Object>) property.get(
+                'Broker__r'
+            );
+            expectedBrokerIdByProperty.put(
+                (String) property.get('Name'),
+                Decimal.valueOf(String.valueOf(broker.get('Broker_Id__c')))
+            );
+        }
+
         Test.startTest();
         SampleDataController.importSampleData();
         Test.stopTest();
 
-        Assert.areEqual(
-            0,
-            [SELECT COUNT() FROM Property__c WHERE Broker__c = NULL],
-            'Expected every property to be linked to an imported broker.'
-        );
+        for (Property__c property : [
+            SELECT Name, Broker__r.Broker_Id__c
+            FROM Property__c
+        ]) {
+            Assert.areEqual(
+                expectedBrokerIdByProperty.get(property.Name),
+                property.Broker__r?.Broker_Id__c,
+                'Expected ' +
+                    property.Name +
+                    ' to be linked to its sample broker.'
+            );
+        }
     }
 
     @isTest
