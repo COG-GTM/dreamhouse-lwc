@@ -491,4 +491,35 @@ private class TestSampleDataController {
             'Expected randomized Date_Listed__c values, got ' + distinctDates
         );
     }
+
+    @isTest
+    static void importSampleData_failureAfterEarlierInserts_rollsBackEverything() {
+        // dreamhouse grants Broker__c and Property__c but not Contact, so the
+        // contact insert fails after brokers and properties were inserted.
+        User noContactAccess = createUser('Minimum Access - Salesforce', true);
+        Exception caught;
+
+        Test.startTest();
+        try {
+            importAs(noContactAccess);
+        } catch (Exception e) {
+            caught = e;
+        }
+        Test.stopTest();
+
+        Assert.isNotNull(
+            caught,
+            'A user without Contact create access must not be able to import.'
+        );
+        Assert.areEqual(
+            0,
+            [SELECT COUNT() FROM Broker__c],
+            'Brokers inserted before the failure should be rolled back.'
+        );
+        Assert.areEqual(
+            0,
+            [SELECT COUNT() FROM Property__c],
+            'Properties inserted before the failure should be rolled back.'
+        );
+    }
 }
