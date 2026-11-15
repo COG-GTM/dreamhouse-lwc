@@ -41,7 +41,9 @@ public with sharing class GeocodingService {
                         response.getBody(),
                         List<Coordinates>.class
                     );
-                    coords = deserializedCoords[0];
+                    if (!deserializedCoords.isEmpty()) {
+                        coords = deserializedCoords[0];
+                    }
                 }
             }
 
