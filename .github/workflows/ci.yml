@@ -11,6 +11,10 @@ on:
             - 'sfdx-project.json'
             - 'README.md'
 
+# Least-privilege default for GITHUB_TOKEN; jobs that need more declare it.
+permissions:
+    contents: read
+
 # Jobs to be executed
 jobs:
     format-lint-lwc-tests:
@@ -86,6 +90,10 @@ jobs:
             - name: 'Checkout source code'
               uses: actions/checkout@v7.0.0
 
+            # DEVHUB_SFDX_URL must point at a dedicated Dev Hub, never the shared
+            # `cognition` org: that org is additive deploys only and its existing
+            # Property__c data must not change. Package versions created here also
+            # persist in whatever Dev Hub this points at.
             # Store secret for dev hub
             - name: 'Populate auth file with DEVHUB_SFDX_URL secret'
               shell: bash
@@ -103,23 +111,23 @@ jobs:
 
             # Create scratch org
             - name: 'Create scratch org'
-              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -d -y 1
+              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -v devhub -d -y 1
 
             # Deploy source to scratch org
             - name: 'Push source to scratch org'
-              run: sf project deploy start
+              run: sf project deploy start -o scratch-org
 
             # Assign permissionset
             - name: 'Assign permissionset to default user'
-              run: sf org assign permset -n dreamhouse
+              run: sf org assign permset -n dreamhouse -o scratch-org
 
             # Import sample data
             - name: 'Import sample data'
-              run: sf data tree import -p ./data/sample-data-plan.json
+              run: sf data tree import -p ./data/sample-data-plan.json -o scratch-org
 
             # Run Apex tests in scratch org
             - name: 'Run Apex tests'
-              run: sf apex test run -c -r human -d ./tests/apex -w 20
+              run: sf apex test run -c -r human -d ./tests/apex -w 20 -o scratch-org
 
             # Skip the upload when the CODECOV_TOKEN secret is not configured
             - name: 'Check for Codecov token'

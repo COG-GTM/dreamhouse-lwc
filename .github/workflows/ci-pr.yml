@@ -12,6 +12,10 @@ on:
     pull_request:
         types: [opened, edited, synchronize, reopened]
 
+# Least-privilege default for GITHUB_TOKEN; jobs that need more declare it.
+permissions:
+    contents: read
+
 # Workflow environment variables
 env:
     # Is the PR base branch a prerelease branch
@@ -31,9 +35,10 @@ jobs:
     # Auto merge Dependabot PRs for:
     # - patch updates on prod dependencies
     # - minor updates on dev dependencies
+    # Off by default: opt in with the repository variable ENABLE_REPO_AUTOMATION.
     dependabot-auto-merge:
         # Only run for Dependabot PRs
-        if: github.actor == 'dependabot[bot]'
+        if: github.actor == 'dependabot[bot]' && vars.ENABLE_REPO_AUTOMATION == 'true'
         runs-on: ubuntu-latest
         needs: format-lint-lwc-tests
         permissions:
@@ -140,6 +145,10 @@ jobs:
             - name: 'Checkout source code'
               uses: actions/checkout@v7.0.0
 
+            # DEVHUB_SFDX_URL must point at a dedicated Dev Hub, never the shared
+            # `cognition` org: that org is additive deploys only and its existing
+            # Property__c data must not change. Package versions created here also
+            # persist in whatever Dev Hub this points at.
             # Store secret for dev hub
             - name: 'Populate auth file with DEVHUB_SFDX_URL secret'
               shell: bash
@@ -158,28 +167,28 @@ jobs:
             # Create prerelease scratch org
             - name: 'Create prerelease scratch org'
               if: ${{ env.IS_PRERELEASE }}
-              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -d -y 1 --release=preview
+              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -v devhub -d -y 1 --release=preview
 
             # Create scratch org
             - name: 'Create scratch org'
               if: ${{ !env.IS_PRERELEASE }}
-              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -d -y 1
+              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -v devhub -d -y 1
 
             # Deploy source to scratch org
             - name: 'Push source to scratch org'
-              run: sf project deploy start
+              run: sf project deploy start -o scratch-org
 
             # Assign permissionset
             - name: 'Assign permissionset to default user'
-              run: sf org assign permset -n dreamhouse
+              run: sf org assign permset -n dreamhouse -o scratch-org
 
             # Import sample data
             - name: 'Import sample data'
-              run: sf data tree import -p ./data/sample-data-plan.json
+              run: sf data tree import -p ./data/sample-data-plan.json -o scratch-org
 
             # Run Apex tests in scratch org
             - name: 'Run Apex tests'
-              run: sf apex test run -c -r human -d ./tests/apex -w 20
+              run: sf apex test run -c -r human -d ./tests/apex -w 20 -o scratch-org
 
             # Skip the upload when the CODECOV_TOKEN secret is not configured
             - name: 'Check for Codecov token'
