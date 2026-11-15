@@ -6,7 +6,7 @@ on:
 
 jobs:
     codetour-watch:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
         if: github.actor != 'trailheadapps-bot' && github.actor != 'dependabot[bot]'
         steps:
             - name: 'Checkout source code'
@@ -17,7 +17,7 @@ jobs:
 
     skip-codetour-watch:
         if: github.actor == 'trailheadapps-bot' || github.actor == 'dependabot[bot]'
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
         steps:
             - name: Noop
               run: |

@@ -14,7 +14,9 @@ on:
 # Jobs to be executed
 jobs:
     format-lint-lwc-tests:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
+        env:
+            CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         steps:
             # Checkout the source code
             - name: 'Checkout source code'
@@ -54,15 +56,20 @@ jobs:
 
             # Upload code coverage data
             - name: 'Upload code coverage for LWC to Codecov.io'
+              if: env.CODECOV_TOKEN != ''
               uses: codecov/codecov-action@v7.0.0
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   flags: LWC
 
+    # Requires a Dev Hub (DEVHUB_SFDX_URL secret). Opt in by setting the
+    # repository variable ENABLE_SCRATCH_ORG_CI to 'true'.
     scratch-org-test:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
         needs: format-lint-lwc-tests
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && vars.ENABLE_SCRATCH_ORG_CI == 'true'
+        env:
+            CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         steps:
             # Install Salesforce CLI
             - name: 'Install Salesforce CLI'
@@ -113,6 +120,7 @@ jobs:
 
             # Upload code coverage data
             - name: 'Upload code coverage for Apex to Codecov.io'
+              if: env.CODECOV_TOKEN != ''
               uses: codecov/codecov-action@v7.0.0
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
@@ -123,9 +131,11 @@ jobs:
               if: always()
               run: sf org delete scratch -p -o scratch-org
 
+    # Requires the BOT_ACCESS_TOKEN secret; runs only after scratch-org-test.
     trigger-packaging:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
         needs: scratch-org-test
+        if: vars.ENABLE_SCRATCH_ORG_CI == 'true'
         steps:
             # Checkout the source code
             - name: 'Checkout source code'
