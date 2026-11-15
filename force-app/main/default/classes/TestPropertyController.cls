@@ -398,7 +398,12 @@ private class TestPropertyController {
         Profile standardUserProfile = [
             SELECT Id
             FROM Profile
-            WHERE Name = 'Standard User'
+            WHERE
+                UserType = 'Standard'
+                AND PermissionsPrivacyDataAccess = FALSE
+                AND PermissionsSubmitMacrosAllowed = TRUE
+                AND PermissionsMassInlineEdit = TRUE
+            LIMIT 1
         ];
         User userWithoutAccess = new User(
             Alias = 'noaccess',
