@@ -1,7 +1,10 @@
 import { createElement } from '@lwc/engine-dom';
 import PropertyLocation from 'c/propertyLocation';
 import { getRecord } from 'lightning/uiRecordApi';
-import { setDeviceLocationServiceAvailable } from 'lightning/mobileCapabilities';
+import {
+    getLocationService,
+    setDeviceLocationServiceAvailable
+} from 'lightning/mobileCapabilities';
 import { mockGeolocation } from '../../../../../test/jest-mocks/global/navigator';
 
 // Realistic property record
@@ -29,7 +32,10 @@ const checkDistanceCalculation = (element) => {
 };
 
 describe('c-property-location', () => {
+    const originalGeolocation = global.navigator.geolocation;
+
     afterEach(() => {
+        global.navigator.geolocation = originalGeolocation;
         // The jsdom instance is shared across test cases in a single file so reset the DOM
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
@@ -131,5 +137,70 @@ describe('c-property-location', () => {
         await flushPromises();
 
         await expect(element).toBeAccessible();
+    });
+
+    it('renders an error panel when the device location request fails', async () => {
+        const locationError = { message: 'Location permission denied' };
+        getLocationService.mockImplementationOnce(() => ({
+            isAvailable: () => true,
+            getCurrentPosition: () => Promise.reject(locationError)
+        }));
+
+        const element = createElement('c-property-location', {
+            is: PropertyLocation
+        });
+        element.recordId = mockPropertyRecord.id;
+        document.body.appendChild(element);
+
+        getRecord.emit(mockPropertyRecord);
+
+        await flushPromises();
+        await flushPromises();
+
+        const panelEl = element.shadowRoot.querySelector('c-error-panel');
+        expect(panelEl).not.toBeNull();
+        expect(panelEl.errors).toEqual(locationError);
+    });
+
+    it('renders an error panel when the browser location request fails', async () => {
+        setDeviceLocationServiceAvailable(false);
+        const locationError = { code: 1, message: 'User denied Geolocation' };
+        global.navigator.geolocation = {
+            getCurrentPosition: jest.fn((success, error) =>
+                error(locationError)
+            )
+        };
+
+        const element = createElement('c-property-location', {
+            is: PropertyLocation
+        });
+        element.recordId = mockPropertyRecord.id;
+        document.body.appendChild(element);
+
+        getRecord.emit(mockPropertyRecord);
+
+        await flushPromises();
+
+        const panelEl = element.shadowRoot.querySelector('c-error-panel');
+        expect(panelEl).not.toBeNull();
+        expect(panelEl.errors).toEqual(locationError);
+    });
+
+    it('renders a spinner until the property and location are both known', async () => {
+        setDeviceLocationServiceAvailable(false);
+        global.navigator.geolocation = mockGeolocation;
+
+        const element = createElement('c-property-location', {
+            is: PropertyLocation
+        });
+        element.recordId = mockPropertyRecord.id;
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        expect(
+            element.shadowRoot.querySelector('lightning-spinner')
+        ).not.toBeNull();
+        expect(element.shadowRoot.querySelector('div.location')).toBeNull();
     });
 });

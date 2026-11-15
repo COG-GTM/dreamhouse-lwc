@@ -3,9 +3,17 @@
     "childRelationships": {},
     "eTag": "e724fda6d93b891f98c7e0b6b3d7686c",
     "fields": {
-        "Broker__c": {
+        "Address__c": {
             "displayValue": null,
-            "value": "a003h000003xlBiAAI"
+            "value": "127 Endicott St"
+        },
+        "City__c": {
+            "displayValue": null,
+            "value": "Boston"
+        },
+        "Description__c": {
+            "displayValue": null,
+            "value": "Lovingly restored Victorian with a private garden."
         }
     },
     "id": "a013h000009HEM7AAO",

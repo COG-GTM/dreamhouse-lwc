@@ -1,7 +1,12 @@
 import { createElement } from '@lwc/engine-dom';
 import PropertyTileList from 'c/propertyTileList';
 import getPagedPropertyList from '@salesforce/apex/PropertyController.getPagedPropertyList';
-import { publish, subscribe, MessageContext } from 'lightning/messageService';
+import {
+    publish,
+    subscribe,
+    unsubscribe,
+    MessageContext
+} from 'lightning/messageService';
 import FILTERSCHANGEMC from '@salesforce/messageChannel/FiltersChange__c';
 import PROPERTYSELECTEDMC from '@salesforce/messageChannel/PropertySelected__c';
 
@@ -126,9 +131,70 @@ describe('c-property-tile-list', () => {
 
         const propertyTile =
             element.shadowRoot.querySelector('c-property-tile');
-        propertyTile.dispatchEvent(new CustomEvent('selected'));
+        const propertyId = mockgetPagedPropertyList.records[0].Id;
+        propertyTile.dispatchEvent(
+            new CustomEvent('selected', { detail: propertyId })
+        );
         expect(publish).toHaveBeenCalledWith(undefined, PROPERTYSELECTEDMC, {
-            propertyId: null
+            propertyId
         });
+    });
+
+    it('unregisters the propertyFilters subscriber when removed from the DOM', () => {
+        const subscription = { id: 'sub-1' };
+        subscribe.mockReturnValueOnce(subscription);
+        const element = createElement('c-property-tile-list', {
+            is: PropertyTileList
+        });
+        document.body.appendChild(element);
+        document.body.removeChild(element);
+
+        expect(unsubscribe).toHaveBeenCalledWith(subscription);
+    });
+
+    it('passes paging info to c-paginator', async () => {
+        const element = createElement('c-property-tile-list', {
+            is: PropertyTileList
+        });
+        document.body.appendChild(element);
+        getPagedPropertyList.emit(mockgetPagedPropertyList);
+
+        await flushPromises();
+
+        const paginatorEl = element.shadowRoot.querySelector('c-paginator');
+        expect(paginatorEl.pageNumber).toBe(1);
+        expect(paginatorEl.pageSize).toBe(9);
+        expect(paginatorEl.totalItemCount).toBe(
+            mockgetPagedPropertyList.totalItemCount
+        );
+        expect(getPagedPropertyList.getLastConfig()).toEqual({
+            searchKey: '',
+            maxPrice: 9999999,
+            minBedrooms: 0,
+            minBathrooms: 0,
+            pageSize: 9,
+            pageNumber: 1
+        });
+    });
+
+    it('requests the next and previous pages from c-paginator events', async () => {
+        const element = createElement('c-property-tile-list', {
+            is: PropertyTileList
+        });
+        document.body.appendChild(element);
+        getPagedPropertyList.emit(mockgetPagedPropertyList);
+
+        await flushPromises();
+
+        const paginatorEl = element.shadowRoot.querySelector('c-paginator');
+        paginatorEl.dispatchEvent(new CustomEvent('next'));
+        await flushPromises();
+        expect(getPagedPropertyList.getLastConfig().pageNumber).toBe(2);
+        expect(paginatorEl.pageNumber).toBe(2);
+
+        paginatorEl.dispatchEvent(new CustomEvent('previous'));
+        await flushPromises();
+        expect(getPagedPropertyList.getLastConfig().pageNumber).toBe(1);
+        expect(paginatorEl.pageNumber).toBe(1);
     });
 });

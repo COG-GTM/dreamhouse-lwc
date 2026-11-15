@@ -75,6 +75,72 @@ describe('c-property-carousel', () => {
                 'lightning-carousel-image'
             );
             expect(carouselImageEls.length).toBe(mockGetPictures.length);
+            carouselImageEls.forEach((imageEl, index) => {
+                expect(imageEl.src).toBe(
+                    `/sfc/servlet.shepherd/version/download/${mockGetPictures[index].Id}`
+                );
+                expect(imageEl.description).toBe(mockGetPictures[index].Title);
+            });
+        });
+
+        it('shows the property address as the card title', async () => {
+            const element = createElement('c-property-carousel', {
+                is: PropertyCarousel
+            });
+            document.body.appendChild(element);
+
+            getRecord.emit(mockGetPropertyRecord);
+            getPictures.emit(mockGetPictures);
+
+            await flushPromises();
+
+            const titleEl =
+                element.shadowRoot.querySelector('span[slot="title"]');
+            expect(titleEl.textContent).toBe(
+                mockGetPropertyRecord.fields.Address__c.value
+            );
+        });
+
+        it('renders no pictures message when pictures become empty', async () => {
+            const element = createElement('c-property-carousel', {
+                is: PropertyCarousel
+            });
+            document.body.appendChild(element);
+
+            getRecord.emit(mockGetPropertyRecord);
+            getPictures.emit(mockGetPictures);
+            await flushPromises();
+
+            // All pictures removed
+            getPictures.emit([]);
+            await flushPromises();
+
+            expect(
+                element.shadowRoot.querySelector('lightning-carousel')
+            ).toBeNull();
+            const pEl = element.shadowRoot.querySelector(
+                'p.slds-text-align_center'
+            );
+            expect(pEl).not.toBeNull();
+        });
+
+        it('passes both errors to the error panel when both wires fail', async () => {
+            const element = createElement('c-property-carousel', {
+                is: PropertyCarousel
+            });
+            document.body.appendChild(element);
+
+            getRecord.error();
+            getPictures.error();
+
+            await flushPromises();
+
+            const errorPanelEl =
+                element.shadowRoot.querySelector('c-error-panel');
+            expect(errorPanelEl.friendlyMessage).toBe(
+                'Error retrieving pictures'
+            );
+            expect(errorPanelEl.errors.length).toBe(2);
         });
 
         it('renders no pictures message when property but no pictures returned', async () => {
@@ -143,6 +209,7 @@ describe('c-property-carousel', () => {
             const element = createElement('c-property-carousel', {
                 is: PropertyCarousel
             });
+            element.recordId = 'a003h000002TzXbAAK';
             document.body.appendChild(element);
 
             // Emit mock property
@@ -167,8 +234,78 @@ describe('c-property-carousel', () => {
 
             // Assertions
             expect(processImage).toHaveBeenCalled();
-            expect(createFile).toHaveBeenCalled();
+            expect(processImage.mock.calls[0][1]).toMatchObject({
+                targetWidth: 500,
+                targetHeight: 500
+            });
+            expect(createFile).toHaveBeenCalledWith({
+                base64data: expect.any(String),
+                filename: 'test.jpg',
+                recordId: 'a003h000002TzXbAAK'
+            });
             expect(refreshApex).toHaveBeenCalled();
+        });
+
+        it('uploads each selected picture', async () => {
+            const element = createElement('c-property-carousel', {
+                is: PropertyCarousel
+            });
+            element.recordId = 'a003h000002TzXbAAK';
+            document.body.appendChild(element);
+
+            getRecord.emit(mockGetPropertyRecord);
+            createFile.mockResolvedValue('A00012345678');
+
+            await flushPromises();
+
+            const lightningInputEl =
+                element.shadowRoot.querySelector('lightning-input');
+            lightningInputEl.files = [
+                new File(['1234'], 'one.jpg', { type: 'image/jpeg' }),
+                new File(['5678'], 'two.png', { type: 'image/png' })
+            ];
+            lightningInputEl.dispatchEvent(new CustomEvent('change'));
+
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(processImage).toHaveBeenCalledTimes(2);
+            expect(createFile).toHaveBeenCalledTimes(2);
+            expect(createFile.mock.calls[1][0].filename).toBe('two.png');
+            expect(refreshApex).toHaveBeenCalledTimes(2);
+        });
+
+        it('logs an error and does not refresh when the upload fails', async () => {
+            const consoleErrorSpy = jest
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
+            const element = createElement('c-property-carousel', {
+                is: PropertyCarousel
+            });
+            document.body.appendChild(element);
+
+            getRecord.emit(mockGetPropertyRecord);
+            const uploadError = new Error('Upload failed');
+            createFile.mockRejectedValue(uploadError);
+
+            await flushPromises();
+
+            const lightningInputEl =
+                element.shadowRoot.querySelector('lightning-input');
+            lightningInputEl.files = [
+                new File(['1234'], 'test.jpg', { type: 'image/jpeg' })
+            ];
+            lightningInputEl.dispatchEvent(new CustomEvent('change'));
+
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(consoleErrorSpy).toHaveBeenCalledWith(
+                'Error compressing and creating file: ',
+                uploadError
+            );
+            expect(refreshApex).not.toHaveBeenCalled();
+            consoleErrorSpy.mockRestore();
         });
     });
 });
