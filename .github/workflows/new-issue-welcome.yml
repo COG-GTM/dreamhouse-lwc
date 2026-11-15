@@ -4,9 +4,17 @@ on:
     issues:
         types: [opened]
 
+# Least-privilege default for GITHUB_TOKEN; jobs that need more declare it.
+permissions:
+    contents: read
+
 jobs:
+    # Off by default: opt in with the repository variable ENABLE_REPO_AUTOMATION.
     comment:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
+        if: vars.ENABLE_REPO_AUTOMATION == 'true'
+        permissions:
+            issues: write
         steps:
             - uses: actions/github-script@v9.0.0
               with:

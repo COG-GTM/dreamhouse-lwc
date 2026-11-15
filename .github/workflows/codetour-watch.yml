@@ -4,20 +4,30 @@ on:
     pull_request:
         types: [opened, edited, synchronize, reopened]
 
+# Least-privilege default for GITHUB_TOKEN; jobs that need more declare it.
+permissions:
+    contents: read
+
 jobs:
     codetour-watch:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
         if: github.actor != 'trailheadapps-bot' && github.actor != 'dependabot[bot]'
+        permissions:
+            contents: read
+            pull-requests: write
         steps:
             - name: 'Checkout source code'
               uses: actions/checkout@v7.0.0
 
             - name: 'Watch CodeTour changes'
               uses: pozil/codetour-watch@v4.0.0
+              with:
+                  # Only comment on the PR when ENABLE_REPO_AUTOMATION is 'true'
+                  silent: ${{ vars.ENABLE_REPO_AUTOMATION != 'true' }}
 
     skip-codetour-watch:
         if: github.actor == 'trailheadapps-bot' || github.actor == 'dependabot[bot]'
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
         steps:
             - name: Noop
               run: |

@@ -7,10 +7,19 @@ on:
     repository_dispatch:
         types: [start-packaging]
 
+# Least-privilege default for GITHUB_TOKEN; jobs that need more declare it.
+permissions:
+    contents: read
+
 # Jobs to be executed
 jobs:
     release-package-version:
-        runs-on: trailheadapps-Ubuntu
+        runs-on: ubuntu-latest
+        # Requires a Dev Hub (DEVHUB_SFDX_URL secret); opt in with ENABLE_SCRATCH_ORG_CI.
+        if: vars.ENABLE_SCRATCH_ORG_CI == 'true'
+        permissions:
+            contents: write
+            pull-requests: write
         steps:
             # Install Salesforce CLI
             - name: 'Install Salesforce CLI'
@@ -26,6 +35,10 @@ jobs:
               with:
                   ref: ${{ github.event.client_payload.ref }}
 
+            # DEVHUB_SFDX_URL must point at a dedicated Dev Hub, never the shared
+            # `cognition` org: that org is additive deploys only and its existing
+            # Property__c data must not change. Package versions created here also
+            # persist in whatever Dev Hub this points at.
             # Store secret for dev hub
             - name: 'Populate auth file with DEVHUB_SFDX_URL secret'
               shell: bash
@@ -50,7 +63,7 @@ jobs:
               id: createPackageVersion
               run: |
                   set +e
-                  json=$(sf package version create -p DreamhouseLWC -x -w 20 -f config/project-scratch-def.json --json)
+                  json=$(sf package version create -p DreamhouseLWC -v devhub -x -w 20 -f config/project-scratch-def.json --json)
                   echo $json
                   status=$(echo $json | jq '.status')
                   if [ $status == "0" ]; then
@@ -67,7 +80,7 @@ jobs:
 
             # Create scratch org
             - name: 'Create scratch org'
-              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -d -y 1
+              run: sf org create scratch -f config/project-scratch-def.json -a scratch-org -v devhub -d -y 1
 
             # Install new package in scratch org
             - name: 'Install new package version in scratch org'
