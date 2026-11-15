@@ -1,7 +1,9 @@
 import { createElement } from '@lwc/engine-dom';
 import PropertyOffers from 'c/propertyOffers';
 import { refreshApex } from '@salesforce/apex';
-import { notifyRecordUpdateAvailable } from 'lightning/uiRecordApi';
+import { getRecord, notifyRecordUpdateAvailable } from 'lightning/uiRecordApi';
+import PRICE_FIELD from '@salesforce/schema/Property__c.Price__c';
+import STATUS_FIELD from '@salesforce/schema/Property__c.Status__c';
 import { ShowToastEventName } from 'lightning/platformShowToastEvent';
 import getOffers from '@salesforce/apex/PropertyOffersController.getOffers';
 import submitOffer from '@salesforce/apex/PropertyOffersController.submitOffer';
@@ -93,6 +95,73 @@ function validInputs(element, valid = true) {
     });
 }
 describe('c-property-offers', () => {
+    it.each([
+        [900000, 'Available'],
+        [845000, 'Closed']
+    ])(
+        'refreshes offers after a property edit to price %s and status %s',
+        async (price, status) => {
+            await mount();
+            getRecord.emit({
+                fields: {
+                    Price__c: { value: price },
+                    Status__c: { value: status }
+                }
+            });
+            await flush();
+            expect(refreshApex).toHaveBeenCalledTimes(1);
+            expect(getRecord.getLastConfig()).toEqual({
+                recordId: 'property1',
+                fields: [PRICE_FIELD, STATUS_FIELD]
+            });
+        }
+    );
+    it('refreshes a reopened property and renders the refreshed status and price', async () => {
+        const element = await mount(data([], false, 'Closed'));
+        expect(button(element, 'Submit').disabled).toBe(true);
+        getRecord.emit({
+            fields: {
+                Price__c: { value: 1000000 },
+                Status__c: { value: 'Available' }
+            }
+        });
+        await flush();
+        expect(refreshApex).toHaveBeenCalledTimes(1);
+        getOffers.emit({ ...data(), askingPrice: 1000000 });
+        input(element, 'Offer amount', 900000);
+        await flush();
+        expect(button(element, 'Submit').disabled).toBe(false);
+        expect(
+            element.shadowRoot.querySelector('[aria-live]').textContent
+        ).toBe('10.0% below asking');
+    });
+    it('does not refresh unchanged property values or missing record data', async () => {
+        await mount();
+        getRecord.emit({
+            fields: {
+                Price__c: { value: 845000 },
+                Status__c: { value: 'Available' }
+            }
+        });
+        await flush();
+        getRecord.error();
+        await flush();
+        expect(refreshApex).not.toHaveBeenCalled();
+    });
+    it('toasts errors refreshing edited property values', async () => {
+        const element = await mount();
+        const toast = jest.fn();
+        element.addEventListener(ShowToastEventName, toast);
+        refreshApex.mockRejectedValueOnce(new Error('Refresh denied'));
+        getRecord.emit({
+            fields: {
+                Price__c: { value: 900000 },
+                Status__c: { value: 'Available' }
+            }
+        });
+        await flush();
+        expect(toast.mock.calls[0][0].detail.message).toBe('Refresh denied');
+    });
     afterEach(() => {
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
