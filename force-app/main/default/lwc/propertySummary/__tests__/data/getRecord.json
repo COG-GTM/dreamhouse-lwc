@@ -8,13 +8,13 @@
     "recordTypeInfo": null,
     "systemModstamp": "2020-06-09T07:48:54.000Z",
     "fields": {
-        "Date_Listed__c": {
-            "displayValue": "30/5/2020",
-            "value": "2020-05-30"
-        },
-        "Days_On_Market__c": {
+        "Name": {
             "displayValue": null,
-            "value": 18
+            "value": "Stunning Victorian"
+        },
+        "Picture__c": {
+            "displayValue": null,
+            "value": "https://s3-us-west-2.amazonaws.com/dev-or-devrl-s3-bucket/sample-apps/dreamhouse/house01.jpg"
         }
     }
 }

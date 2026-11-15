@@ -89,3 +89,44 @@ export const getBarcodeScanner = jest.fn().mockImplementation(() => {
         endCapture: jest.fn().mockReturnValue(_barcodeScannerAvailable)
     };
 });
+
+// ~~~~~ MOCK getContactsService ~~~~~
+
+// To stub getContactsService from within a test, add the following:
+// import { setContactsServiceAvailable, setContactsServiceResult } from 'lightning/mobileCapabilities';
+// setContactsServiceAvailable(true);
+
+let _contactsServiceAvailable = false;
+let _contactsServiceContacts = [];
+let _contactsServiceError = null;
+
+export const resetContactsServiceStubs = () => {
+    _contactsServiceAvailable = false;
+    _contactsServiceContacts = [];
+    _contactsServiceError = null;
+};
+
+export const setContactsServiceAvailable = (value = true) => {
+    _contactsServiceAvailable = value;
+};
+
+export const setContactsServiceContacts = (contacts = []) => {
+    _contactsServiceContacts = contacts;
+};
+
+export const setContactsServiceError = (error) => {
+    _contactsServiceError = error;
+};
+
+export const getContactsService = jest.fn().mockImplementation(() => {
+    return {
+        isAvailable: jest.fn().mockReturnValue(_contactsServiceAvailable),
+        getContacts: jest
+            .fn()
+            .mockImplementation(() =>
+                _contactsServiceError
+                    ? Promise.reject(_contactsServiceError)
+                    : Promise.resolve(_contactsServiceContacts)
+            )
+    };
+});

@@ -1,6 +1,13 @@
 import { createElement } from '@lwc/engine-dom';
 import PropertyMap from 'c/propertyMap';
 import { getRecord } from 'lightning/uiRecordApi';
+import {
+    publish,
+    subscribe,
+    unsubscribe,
+    MessageContext
+} from 'lightning/messageService';
+import PROPERTYSELECTEDMC from '@salesforce/messageChannel/PropertySelected__c';
 
 // Realistic property record
 const mockPropertyRecord = require('./data/propertyRecord.json');
@@ -92,5 +99,91 @@ describe('c-property-map', () => {
         document.body.appendChild(element);
 
         await expect(element).toBeAccessible();
+    });
+
+    it('shows the property address as the card title', async () => {
+        const element = createElement('c-property-map', {
+            is: PropertyMap
+        });
+        document.body.appendChild(element);
+
+        getRecord.emit(mockPropertyRecord);
+
+        await flushPromises();
+
+        const cardEl = element.shadowRoot.querySelector('lightning-card');
+        expect(cardEl.title).toBe(
+            `${mockPropertyRecord.fields.Address__c.value}, ${mockPropertyRecord.fields.City__c.value}`
+        );
+        expect(element.shadowRoot.querySelector('c-error-panel')).toBeNull();
+    });
+
+    it('renders an error panel and clears markers when getRecord returns an error', async () => {
+        const element = createElement('c-property-map', {
+            is: PropertyMap
+        });
+        document.body.appendChild(element);
+
+        getRecord.emit(mockPropertyRecord);
+        await flushPromises();
+        getRecord.error();
+        await flushPromises();
+
+        const panelEl = element.shadowRoot.querySelector('c-error-panel');
+        expect(panelEl).not.toBeNull();
+        expect(panelEl.friendlyMessage).toBe('Error retrieving map');
+        const mapEl = element.shadowRoot.querySelector('lightning-map');
+        expect(mapEl.mapMarkers).toStrictEqual([]);
+        const cardEl = element.shadowRoot.querySelector('lightning-card');
+        expect(cardEl.title).toBeUndefined();
+    });
+
+    it('passes the recordId to getRecord', async () => {
+        const element = createElement('c-property-map', {
+            is: PropertyMap
+        });
+        element.recordId = mockPropertyRecord.id;
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        expect(element.recordId).toBe(mockPropertyRecord.id);
+        expect(getRecord.getLastConfig().recordId).toBe(mockPropertyRecord.id);
+    });
+
+    it('registers the PropertySelected subscriber during the component lifecycle', () => {
+        const element = createElement('c-property-map', {
+            is: PropertyMap
+        });
+        document.body.appendChild(element);
+
+        expect(subscribe).toHaveBeenCalled();
+        expect(subscribe.mock.calls[0][1]).toBe(PROPERTYSELECTEDMC);
+    });
+
+    it('unregisters the PropertySelected subscriber when removed from the DOM', () => {
+        const element = createElement('c-property-map', {
+            is: PropertyMap
+        });
+        document.body.appendChild(element);
+        document.body.removeChild(element);
+
+        expect(unsubscribe).toHaveBeenCalled();
+    });
+
+    it('invokes getRecord with the published propertyId', async () => {
+        const element = createElement('c-property-map', {
+            is: PropertyMap
+        });
+        document.body.appendChild(element);
+
+        publish(MessageContext, PROPERTYSELECTEDMC, {
+            propertyId: mockPropertyRecord.id
+        });
+
+        await flushPromises();
+
+        expect(element.recordId).toBe(mockPropertyRecord.id);
+        expect(getRecord.getLastConfig().recordId).toBe(mockPropertyRecord.id);
     });
 });

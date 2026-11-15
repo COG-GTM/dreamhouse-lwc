@@ -2,8 +2,9 @@ import { createElement } from '@lwc/engine-dom';
 import PropertyListMap from 'c/propertyListMap';
 import getPagedPropertyList from '@salesforce/apex/PropertyController.getPagedPropertyList';
 
-import { subscribe } from 'lightning/messageService';
+import { publish, subscribe, unsubscribe } from 'lightning/messageService';
 import FILTERS_CHANGED from '@salesforce/messageChannel/FiltersChange__c';
+import PROPERTY_SELECTED from '@salesforce/messageChannel/PropertySelected__c';
 
 import { ShowToastEventName } from 'lightning/platformShowToastEvent';
 import { loadScript, loadStyle } from 'lightning/platformResourceLoader';
@@ -216,5 +217,181 @@ describe('c-property-list-map', () => {
         });
         // Check that layer is added to map
         expect(layerGroupAddToMock).toHaveBeenCalled();
+    });
+
+    it('unregisters the propertyFilters subscriber when removed from the DOM', () => {
+        const element = createElement('c-property-list-map', {
+            is: PropertyListMap
+        });
+        document.body.appendChild(element);
+        document.body.removeChild(element);
+
+        expect(unsubscribe).toHaveBeenCalled();
+    });
+
+    it('invokes getPagedPropertyList with the propertyFilters message payload', async () => {
+        const element = createElement('c-property-list-map', {
+            is: PropertyListMap
+        });
+        document.body.appendChild(element);
+
+        const messagePayload = {
+            searchKey: 'victorian',
+            maxPrice: 400000,
+            minBedrooms: 4,
+            minBathrooms: 2
+        };
+        // jest.resetAllMocks() in afterEach strips the LMS stub's routing,
+        // so invoke the registered handler directly
+        const messageHandler = subscribe.mock.calls[0][2];
+        messageHandler(messagePayload);
+
+        await flushPromises();
+
+        const config = getPagedPropertyList.getLastConfig();
+        expect(config.searchKey).toBe(messagePayload.searchKey);
+        expect(config.maxPrice).toBe(messagePayload.maxPrice);
+        expect(config.minBedrooms).toBe(messagePayload.minBedrooms);
+        expect(config.minBathrooms).toBe(messagePayload.minBathrooms);
+    });
+
+    it('uses the error message in the toast when Leaflet fails with an Error', async () => {
+        loadScript.mockRejectedValue(new Error('Network failure'));
+
+        const element = createElement('c-property-list-map', {
+            is: PropertyListMap
+        });
+        const handler = jest.fn();
+        element.addEventListener(ShowToastEventName, handler);
+        document.body.appendChild(element);
+
+        await flushPromises();
+        await flushPromises();
+
+        expect(handler).toHaveBeenCalled();
+        expect(handler.mock.calls[0][0].detail.message).toBe('Network failure');
+    });
+
+    it('uses the body message in the toast when Leaflet fails with a server error', async () => {
+        loadScript.mockRejectedValue(LOAD_SCRIPT_ERROR);
+
+        const element = createElement('c-property-list-map', {
+            is: PropertyListMap
+        });
+        const handler = jest.fn();
+        element.addEventListener(ShowToastEventName, handler);
+        document.body.appendChild(element);
+
+        await flushPromises();
+        await flushPromises();
+
+        expect(handler.mock.calls[0][0].detail.message).toBe(
+            LOAD_SCRIPT_ERROR.body.message
+        );
+    });
+
+    it('replaces the previous property layer and publishes PropertySelected on marker click', async () => {
+        const markers = [];
+        const markerMock = jest.fn(() => {
+            const marker = {
+                on: jest.fn(),
+                bindTooltip: jest.fn()
+            };
+            markers.push(marker);
+            return marker;
+        });
+        const removeLayerMock = jest.fn();
+        const layers = [];
+        global.L = {
+            ...LEAFLET_STUB,
+            map: () => ({
+                setView: () => {},
+                scrollWheelZoom: { disable: () => {} },
+                removeLayer: removeLayerMock
+            }),
+            marker: markerMock,
+            layerGroup: () => {
+                const layer = { addTo: jest.fn() };
+                layers.push(layer);
+                return layer;
+            }
+        };
+
+        const element = createElement('c-property-list-map', {
+            is: PropertyListMap
+        });
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        const properties = {
+            records: [
+                {
+                    Id: 'id1',
+                    Name: 'Stunning Victorian',
+                    Beds__c: 4,
+                    Baths__c: 3,
+                    Thumbnail__c: 'https://example.com/thumb1.jpg',
+                    Location__Latitude__s: 10,
+                    Location__Longitude__s: 11
+                }
+            ]
+        };
+        getPagedPropertyList.emit(properties);
+        await flushPromises();
+
+        // Leaflet init adds an empty layer, which the first emission replaces
+        expect(removeLayerMock).toHaveBeenCalledTimes(1);
+        expect(removeLayerMock).toHaveBeenCalledWith(layers[0]);
+        expect(layers[1].addTo).toHaveBeenCalled();
+        expect(markers[0].propertyId).toBe('id1');
+
+        // Tooltip contains the property details
+        const tooltip = markers[0].bindTooltip.mock.calls[0][0];
+        expect(tooltip).toContain('Stunning Victorian');
+        expect(tooltip).toContain('Beds: 4 - Baths: 3');
+        expect(tooltip).toContain('https://example.com/thumb1.jpg');
+
+        // Clicking a marker publishes the property id
+        const [eventName, clickHandler] = markers[0].on.mock.calls[0];
+        expect(eventName).toBe('click');
+        clickHandler({ target: markers[0] });
+        expect(publish).toHaveBeenCalledWith(undefined, PROPERTY_SELECTED, {
+            propertyId: 'id1'
+        });
+
+        // Second emission removes the previous layer before adding a new one
+        getPagedPropertyList.emit(MOCK_PROPERTIES);
+        await flushPromises();
+        expect(removeLayerMock).toHaveBeenCalledTimes(2);
+        expect(removeLayerMock).toHaveBeenLastCalledWith(layers[1]);
+        expect(layers[2].addTo).toHaveBeenCalled();
+        expect(markerMock).toHaveBeenCalledTimes(
+            1 + MOCK_PROPERTIES.records.length
+        );
+    });
+
+    it('defers drawing properties received before Leaflet is ready', async () => {
+        const markerMock = jest.fn(() => ({
+            on: () => {},
+            bindTooltip: () => {}
+        }));
+        global.L = { ...LEAFLET_STUB, marker: markerMock };
+
+        const element = createElement('c-property-list-map', {
+            is: PropertyListMap
+        });
+        document.body.appendChild(element);
+
+        // Leaflet is still loading
+        getPagedPropertyList.emit(MOCK_PROPERTIES);
+        expect(markerMock).not.toHaveBeenCalled();
+
+        // Once Leaflet is ready, the stored properties are drawn
+        await flushPromises();
+        await flushPromises();
+        expect(markerMock).toHaveBeenCalledTimes(
+            MOCK_PROPERTIES.records.length
+        );
     });
 });

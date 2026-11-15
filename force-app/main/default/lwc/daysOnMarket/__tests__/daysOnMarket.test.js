@@ -87,8 +87,9 @@ describe('c-days-on-market', () => {
         // The component subscription should cause getRecord to be invoked.
         // Below we test that it is invoked with the messagePayload value
         // that was published with the simulated publish invocation above.
-        const { propertyId, fields } = getRecord.getLastConfig();
-        expect(propertyId).toEqual(messagePayload.recordId);
+        const { recordId, fields } = getRecord.getLastConfig();
+        expect(recordId).toEqual(messagePayload.propertyId);
+        expect(element.recordId).toEqual(messagePayload.propertyId);
         expect(fields).toEqual([DATE_LISTED_FIELD, DAYS_ON_MARKET_FIELD]);
     });
 
@@ -251,5 +252,18 @@ describe('c-days-on-market', () => {
         document.body.appendChild(element);
 
         await expect(element).toBeAccessible();
+    });
+
+    it('passes the recordId to getRecord', async () => {
+        const element = createElement('c-days-on-market', {
+            is: DaysOnMarket
+        });
+        element.recordId = '001';
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        expect(element.recordId).toBe('001');
+        expect(getRecord.getLastConfig().recordId).toBe('001');
     });
 });
