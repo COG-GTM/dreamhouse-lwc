@@ -72,6 +72,75 @@ private class TestPropertyController {
     }
 
     @isTest
+    static void testGetPagedPropertyListNullSearchKeyMatchesAll() {
+        TestPropertyController.createProperties(5);
+
+        Test.startTest();
+        PagedResult result = PropertyController.getPagedPropertyList(
+            null,
+            999999,
+            0,
+            0,
+            10,
+            1
+        );
+        Test.stopTest();
+
+        Assert.areEqual(5, result.totalItemCount);
+        Assert.areEqual(5, result.records.size());
+    }
+
+    @isTest
+    static void testGetPagedPropertyListCountEnforcesUserMode() {
+        Profile standardUserProfile = [
+            SELECT Id
+            FROM Profile
+            WHERE
+                UserType = 'Standard'
+                AND PermissionsPrivacyDataAccess = FALSE
+                AND PermissionsSubmitMacrosAllowed = TRUE
+                AND PermissionsMassInlineEdit = TRUE
+            LIMIT 1
+        ];
+        User noAccessUser = new User(
+            Alias = 'noacc',
+            Email = 'noaccessuser@testorg.com',
+            EmailEncodingKey = 'UTF-8',
+            LastName = 'NoAccess',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US',
+            ProfileId = standardUserProfile.Id,
+            TimeZoneSidKey = 'America/Los_Angeles',
+            UserName = 'noaccessuser@dreamhouse-testorg.com'
+        );
+        insert noAccessUser;
+        TestPropertyController.createProperties(5);
+
+        System.runAs(noAccessUser) {
+            Assert.isFalse(Schema.SObjectType.Property__c.isAccessible());
+            Test.startTest();
+            Integer queriesBefore = Limits.getQueries();
+            try {
+                PropertyController.getPagedPropertyList(
+                    '',
+                    999999,
+                    0,
+                    0,
+                    10,
+                    1
+                );
+                Assert.fail(
+                    'Expected a SecurityException from the COUNT() query'
+                );
+            } catch (SecurityException e) {
+                // Thrown by COUNT() WITH USER_MODE before any query runs
+                Assert.areEqual(0, Limits.getQueries() - queriesBefore);
+            }
+            Test.stopTest();
+        }
+    }
+
+    @isTest
     static void testGetPicturesNoResults() {
         Property__c property = new Property__c(Name = 'Name');
         insert property;
