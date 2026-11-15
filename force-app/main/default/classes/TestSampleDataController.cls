@@ -92,13 +92,15 @@ private class TestSampleDataController {
     }
 
     @isTest
-    static void importSampleDataListsPropertiesWithinLast90Days() {
-        Date today = System.today();
-
+    static void importSampleDataRandomizesDateListedWithinLast90Days() {
         Test.startTest();
         SampleDataController.importSampleData();
         Test.stopTest();
 
+        // Read after the import and allow one extra day so a run that
+        // crosses midnight still passes.
+        Date today = System.today();
+        Set<Date> distinctDates = new Set<Date>();
         for (Property__c property : [
             SELECT Name, Date_Listed__c
             FROM Property__c
@@ -108,12 +110,19 @@ private class TestSampleDataController {
                 'Expected Date_Listed__c to be set on ' + property.Name
             );
             Assert.isTrue(
-                property.Date_Listed__c >= today.addDays(-89) &&
+                property.Date_Listed__c >= today.addDays(-90) &&
                     property.Date_Listed__c <= today,
                 'Expected Date_Listed__c within the last 90 days on ' +
                 property.Name
             );
+            distinctDates.add(property.Date_Listed__c);
         }
+        // Date_Listed__c defaults to TODAY() - 10, so identical dates on
+        // every property would mean the randomizer did not run.
+        Assert.isTrue(
+            distinctDates.size() > 1,
+            'Expected randomized Date_Listed__c values, got ' + distinctDates
+        );
     }
 
     @isTest
