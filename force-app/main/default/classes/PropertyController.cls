@@ -28,7 +28,7 @@ public with sharing class PropertyController {
         Integer safePageSize = pageSize ?? DEFAULT_PAGE_SIZE;
         Integer safePageNumber = pageNumber ?? 1;
 
-        String searchPattern = '%' + searchKey + '%';
+        String searchPattern = '%' + (searchKey ?? '') + '%';
         Integer offset = (safePageNumber - 1) * safePageSize;
 
         PagedResult result = new PagedResult();
@@ -44,6 +44,7 @@ public with sharing class PropertyController {
                 AND Price__c <= :safeMaxPrice
                 AND Beds__c >= :safeMinBedrooms
                 AND Baths__c >= :safeMinBathrooms
+            WITH USER_MODE
         ];
         result.records = [
             SELECT

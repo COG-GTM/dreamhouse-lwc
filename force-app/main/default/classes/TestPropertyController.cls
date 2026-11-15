@@ -72,6 +72,71 @@ private class TestPropertyController {
     }
 
     @isTest
+    static void testGetPagedPropertyListNullSearchKeyMatchesAll() {
+        TestPropertyController.createProperties(5);
+
+        Test.startTest();
+        PagedResult result = PropertyController.getPagedPropertyList(
+            null,
+            999999,
+            0,
+            0,
+            10,
+            1
+        );
+        Test.stopTest();
+
+        Assert.areEqual(5, result.totalItemCount);
+        Assert.areEqual(5, result.records.size());
+    }
+
+    @isTest
+    static void testGetPagedPropertyListCountEnforcesUserMode() {
+        Profile minimumAccessProfile = [
+            SELECT Id
+            FROM Profile
+            WHERE Name = 'Minimum Access - Salesforce'
+            LIMIT 1
+        ];
+        User noAccessUser = new User(
+            Alias = 'noacc',
+            Email = 'noaccessuser@testorg.com',
+            EmailEncodingKey = 'UTF-8',
+            LastName = 'NoAccess',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US',
+            ProfileId = minimumAccessProfile.Id,
+            TimeZoneSidKey = 'America/Los_Angeles',
+            UserName = 'noaccessuser@dreamhouse-testorg.com'
+        );
+        insert noAccessUser;
+        TestPropertyController.createProperties(5);
+
+        System.runAs(noAccessUser) {
+            Assert.isFalse(Schema.SObjectType.Property__c.isAccessible());
+            Test.startTest();
+            Integer queriesBefore = Limits.getQueries();
+            try {
+                PropertyController.getPagedPropertyList(
+                    '',
+                    999999,
+                    0,
+                    0,
+                    10,
+                    1
+                );
+                Assert.fail('Expected an exception for a user without access');
+            } catch (AssertException e) {
+                throw e;
+            } catch (Exception e) {
+                // The COUNT() query must fail too instead of running in system mode
+                Assert.areEqual(0, Limits.getQueries() - queriesBefore);
+            }
+            Test.stopTest();
+        }
+    }
+
+    @isTest
     static void testGetPicturesNoResults() {
         Property__c property = new Property__c(Name = 'Name');
         insert property;
