@@ -288,6 +288,36 @@ private class TestPropertyController {
     }
 
     @isTest
+    static void getPagedPropertyListAppliesDefaultFiltersForNullInputs() {
+        insert new List<Property__c>{
+            buildProperty('At Default Max', 'Boston', null, 9999999, 0, 0),
+            buildProperty('Above Default Max', 'Boston', null, 10000000, 0, 0)
+        };
+
+        Test.startTest();
+        PagedResult result = PropertyController.getPagedPropertyList(
+            '',
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        Test.stopTest();
+
+        Assert.areEqual(
+            1,
+            result.totalItemCount,
+            'Default max price is 9999999 and default minimum rooms are 0'
+        );
+        Assert.areEqual(
+            'At Default Max',
+            ((Property__c) result.records[0]).Name,
+            'Property at the default boundaries should be included'
+        );
+    }
+
+    @isTest
     static void getPagedPropertyListReturnsRequestedPageSortedByPrice() {
         List<Property__c> properties = new List<Property__c>();
         for (Integer i = 10; i >= 1; i--) {
