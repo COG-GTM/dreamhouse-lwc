@@ -394,6 +394,88 @@ private class TestPropertyController {
     }
 
     @isTest
+    static void getPagedPropertyListThrowsForUserWithoutPropertyAccess() {
+        Profile standardUserProfile = [
+            SELECT Id
+            FROM Profile
+            WHERE Name = 'Standard User'
+        ];
+        User userWithoutAccess = new User(
+            Alias = 'noaccess',
+            Email = 'noaccess@testorg.com',
+            EmailEncodingKey = 'UTF-8',
+            LastName = 'NoAccess',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US',
+            ProfileId = standardUserProfile.Id,
+            TimeZoneSidKey = 'America/Los_Angeles',
+            UserName = 'noaccess@dreamhouse-testorg.com'
+        );
+        insert userWithoutAccess;
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            createProperties(3);
+        }
+
+        System.runAs(userWithoutAccess) {
+            Test.startTest();
+            try {
+                PropertyController.getPagedPropertyList(
+                    '',
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                );
+                Assert.fail(
+                    'Expected a QueryException for a user without Property__c access'
+                );
+            } catch (QueryException e) {
+                Assert.isNotNull(
+                    e.getMessage(),
+                    'WITH USER_MODE should reject the records query'
+                );
+            }
+            Test.stopTest();
+        }
+    }
+
+    @isTest
+    static void getPagedPropertyListThrowsForPageNumberZero() {
+        createProperties(3);
+
+        Test.startTest();
+        try {
+            PropertyController.getPagedPropertyList('', null, null, null, 9, 0);
+            Assert.fail('Expected a QueryException for a negative OFFSET');
+        } catch (QueryException e) {
+            Assert.isNotNull(e.getMessage(), 'Page 0 gives OFFSET -9');
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void getPagedPropertyListThrowsForNegativePageNumber() {
+        createProperties(3);
+
+        Test.startTest();
+        try {
+            PropertyController.getPagedPropertyList(
+                '',
+                null,
+                null,
+                null,
+                9,
+                -1
+            );
+            Assert.fail('Expected a QueryException for a negative OFFSET');
+        } catch (QueryException e) {
+            Assert.isNotNull(e.getMessage(), 'Page -1 gives OFFSET -18');
+        }
+        Test.stopTest();
+    }
+
+    @isTest
     static void getPicturesIgnoresNonImageFiles() {
         Property__c property = new Property__c(Name = 'Name');
         insert property;
