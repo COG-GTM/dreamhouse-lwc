@@ -220,13 +220,15 @@ describe('c-property-list-map', () => {
     });
 
     it('unregisters the propertyFilters subscriber when removed from the DOM', () => {
+        const subscription = { id: 'sub-1' };
+        subscribe.mockReturnValueOnce(subscription);
         const element = createElement('c-property-list-map', {
             is: PropertyListMap
         });
         document.body.appendChild(element);
         document.body.removeChild(element);
 
-        expect(unsubscribe).toHaveBeenCalled();
+        expect(unsubscribe).toHaveBeenCalledWith(subscription);
     });
 
     it('invokes getPagedPropertyList with the propertyFilters message payload', async () => {

@@ -162,13 +162,15 @@ describe('c-property-map', () => {
     });
 
     it('unregisters the PropertySelected subscriber when removed from the DOM', () => {
+        const subscription = { id: 'sub-1' };
+        subscribe.mockReturnValueOnce(subscription);
         const element = createElement('c-property-map', {
             is: PropertyMap
         });
         document.body.appendChild(element);
         document.body.removeChild(element);
 
-        expect(unsubscribe).toHaveBeenCalled();
+        expect(unsubscribe).toHaveBeenCalledWith(subscription);
     });
 
     it('invokes getRecord with the published propertyId', async () => {

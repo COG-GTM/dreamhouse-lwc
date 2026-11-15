@@ -10,7 +10,7 @@ import {
 
 const MOCK_CONTACTS = [
     {
-        Id: 'c1',
+        id: 'c1',
         name: { givenName: 'Ada', familyName: 'Lovelace' },
         phoneNumbers: [
             { value: '555-0100', label: 'mobile' },
@@ -18,7 +18,7 @@ const MOCK_CONTACTS = [
         ]
     },
     {
-        Id: 'c2',
+        id: 'c2',
         name: { givenName: 'Alan', familyName: 'Turing' },
         phoneNumbers: [{ value: '555-0200', label: 'home' }]
     }

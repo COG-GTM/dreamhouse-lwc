@@ -179,13 +179,15 @@ describe('c-property-summary', () => {
     });
 
     it('unregisters the PropertySelected subscriber when removed from the DOM', () => {
+        const subscription = { id: 'sub-1' };
+        subscribe.mockReturnValueOnce(subscription);
         const element = createElement('c-property-summary', {
             is: PropertySummary
         });
         document.body.appendChild(element);
         document.body.removeChild(element);
 
-        expect(unsubscribe).toHaveBeenCalled();
+        expect(unsubscribe).toHaveBeenCalledWith(subscription);
     });
 
     it('invokes getRecord with the published propertyId', async () => {

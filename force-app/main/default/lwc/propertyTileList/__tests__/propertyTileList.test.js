@@ -141,13 +141,15 @@ describe('c-property-tile-list', () => {
     });
 
     it('unregisters the propertyFilters subscriber when removed from the DOM', () => {
+        const subscription = { id: 'sub-1' };
+        subscribe.mockReturnValueOnce(subscription);
         const element = createElement('c-property-tile-list', {
             is: PropertyTileList
         });
         document.body.appendChild(element);
         document.body.removeChild(element);
 
-        expect(unsubscribe).toHaveBeenCalled();
+        expect(unsubscribe).toHaveBeenCalledWith(subscription);
     });
 
     it('passes paging info to c-paginator', async () => {

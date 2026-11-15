@@ -32,7 +32,10 @@ const checkDistanceCalculation = (element) => {
 };
 
 describe('c-property-location', () => {
+    const originalGeolocation = global.navigator.geolocation;
+
     afterEach(() => {
+        global.navigator.geolocation = originalGeolocation;
         // The jsdom instance is shared across test cases in a single file so reset the DOM
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
