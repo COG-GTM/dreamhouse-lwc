@@ -92,10 +92,14 @@ private class TestPropertyController {
 
     @isTest
     static void testGetPagedPropertyListCountEnforcesUserMode() {
-        Profile minimumAccessProfile = [
+        Profile standardUserProfile = [
             SELECT Id
             FROM Profile
-            WHERE Name = 'Minimum Access - Salesforce'
+            WHERE
+                UserType = 'Standard'
+                AND PermissionsPrivacyDataAccess = FALSE
+                AND PermissionsSubmitMacrosAllowed = TRUE
+                AND PermissionsMassInlineEdit = TRUE
             LIMIT 1
         ];
         User noAccessUser = new User(
@@ -105,7 +109,7 @@ private class TestPropertyController {
             LastName = 'NoAccess',
             LanguageLocaleKey = 'en_US',
             LocaleSidKey = 'en_US',
-            ProfileId = minimumAccessProfile.Id,
+            ProfileId = standardUserProfile.Id,
             TimeZoneSidKey = 'America/Los_Angeles',
             UserName = 'noaccessuser@dreamhouse-testorg.com'
         );
@@ -125,11 +129,11 @@ private class TestPropertyController {
                     10,
                     1
                 );
-                Assert.fail('Expected an exception for a user without access');
-            } catch (AssertException e) {
-                throw e;
-            } catch (Exception e) {
-                // The COUNT() query must fail too instead of running in system mode
+                Assert.fail(
+                    'Expected a SecurityException from the COUNT() query'
+                );
+            } catch (SecurityException e) {
+                // Thrown by COUNT() WITH USER_MODE before any query runs
                 Assert.areEqual(0, Limits.getQueries() - queriesBefore);
             }
             Test.stopTest();
