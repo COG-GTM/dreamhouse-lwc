@@ -198,6 +198,10 @@ private with sharing class GeocodingServiceTest {
             200,
             SUCCESS_BODY
         );
+        mock.bodiesByEndpoint.put(
+            BASE_URL + '&postalcode=' + POSTAL_CODE,
+            '[{"lat": 1.5,"lon": 2.5}]'
+        );
         Test.setMock(HttpCalloutMock.class, mock);
 
         // WHEN
@@ -217,8 +221,8 @@ private with sharing class GeocodingServiceTest {
         Assert.areEqual(LONGITUDE, computedCoordinates[0].lon);
         Assert.isNull(computedCoordinates[1].lat);
         Assert.isNull(computedCoordinates[1].lon);
-        Assert.areEqual(LATITUDE, computedCoordinates[2].lat);
-        Assert.areEqual(LONGITUDE, computedCoordinates[2].lon);
+        Assert.areEqual(1.5, computedCoordinates[2].lat);
+        Assert.areEqual(2.5, computedCoordinates[2].lon);
         Assert.areEqual(
             2,
             mock.requests.size(),
@@ -253,6 +257,7 @@ private with sharing class GeocodingServiceTest {
         private final Integer statusCode;
         private final String body;
         public final List<HttpRequest> requests = new List<HttpRequest>();
+        public final Map<String, String> bodiesByEndpoint = new Map<String, String>();
 
         public RecordingHttpCalloutMock(Integer statusCode, String body) {
             this.statusCode = statusCode;
@@ -263,7 +268,11 @@ private with sharing class GeocodingServiceTest {
             requests.add(req);
             HttpResponse res = new HttpResponse();
             res.setHeader('Content-Type', 'application/json');
-            res.setBody(body);
+            res.setBody(
+                bodiesByEndpoint.containsKey(req.getEndpoint())
+                    ? bodiesByEndpoint.get(req.getEndpoint())
+                    : body
+            );
             res.setStatusCode(statusCode);
             return res;
         }
