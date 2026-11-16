@@ -1,6 +1,28 @@
 @isTest
 private with sharing class FileUtilitiesTest {
     @isTest
+    static void createFileLeavesNoFileBehindWhenLinkFails() {
+        // GIVEN
+        String base64Data = EncodingUtil.base64Encode(
+            Blob.valueOf('Dreamhouse test file')
+        );
+        String fileName = 'orphan-check.txt';
+
+        // WHEN
+        try {
+            FileUtilities.createFile(base64Data, fileName, null);
+            Assert.fail('Expected an AuraHandledException');
+        } catch (AuraHandledException e) {
+            // THEN
+            Assert.areEqual(
+                0,
+                [SELECT COUNT() FROM ContentVersion WHERE Title = :fileName],
+                'A failed upload must not leave a ContentVersion behind'
+            );
+        }
+    }
+
+    @isTest
     static void createFileSucceedsWhenCorrectInput() {
         // GIVEN
         Property__c property = new Property__c();

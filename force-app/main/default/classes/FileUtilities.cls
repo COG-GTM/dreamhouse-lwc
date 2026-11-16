@@ -5,6 +5,7 @@ public with sharing class FileUtilities {
         String filename,
         String recordId
     ) {
+        Savepoint savepoint = Database.setSavepoint();
         try {
             ContentVersion contentVersion = new ContentVersion();
             contentVersion.VersionData = EncodingUtil.base64Decode(base64data);
@@ -27,6 +28,7 @@ public with sharing class FileUtilities {
 
             return contentDocumentLink.Id;
         } catch (Exception e) {
+            Database.rollback(savepoint);
             throw new AuraHandledException('Error creating file: ' + e);
         }
     }
