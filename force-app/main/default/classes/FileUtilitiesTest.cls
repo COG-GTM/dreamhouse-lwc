@@ -19,6 +19,11 @@ private with sharing class FileUtilitiesTest {
                 [SELECT COUNT() FROM ContentVersion WHERE Title = :fileName],
                 'A failed upload must not leave a ContentVersion behind'
             );
+            Assert.areEqual(
+                0,
+                [SELECT COUNT() FROM ContentDocument WHERE Title = :fileName],
+                'A failed upload must not leave a ContentDocument behind'
+            );
         }
     }
 
