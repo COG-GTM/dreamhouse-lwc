@@ -33,6 +33,8 @@ Dreamhouse is a sample application that demonstrates the unique value propositio
 
 - [Code tours](#code-tours)
 
+- [Architecture](#architecture): How the pages, components, Apex classes, data model and external services fit together.
+
 ## Installing Dreamhouse using a Scratch Org
 
 1. Set up your environment. Follow the steps in the [Quick Start: Lightning Web Components](https://trailhead.salesforce.com/content/learn/projects/quick-start-lightning-web-components/) Trailhead project. The steps include:
@@ -50,7 +52,7 @@ Dreamhouse is a sample application that demonstrates the unique value propositio
 1. Clone this repository:
 
     ```
-    git clone https://github.com/trailheadapps/dreamhouse-lwc
+    git clone https://github.com/COG-GTM/dreamhouse-lwc
     cd dreamhouse-lwc
     ```
 
@@ -96,6 +98,8 @@ Dreamhouse is a sample application that demonstrates the unique value propositio
 
 1. In App Launcher, select the **Dreamhouse** app.
 
+> Tip: [bin/install-scratch.sh](bin/install-scratch.sh) (or [bin/install-scratch.bat](bin/install-scratch.bat) on Windows) runs the scratch org creation, deploy, permission set and sample data steps above in one go, then opens the Property Explorer tab. It deletes any existing scratch org with the **dreamhouse** alias first. Run the shell script from any directory; run the Windows script from inside the `bin` folder, because it changes to the parent of the current directory.
+
 ## Installing Dreamhouse using an Unlocked Package
 
 Follow this set of instructions if you want to deploy the app to a more permanent environment than a Scratch org or if you don't want to install the local developement tools. You can use a non source-tracked orgs such as a free [Developer Edition Org](https://developer.salesforce.com/signup) or a [Trailhead Playground](https://trailhead.salesforce.com/).
@@ -132,7 +136,7 @@ Make sure to start from a brand-new environment to avoid conflicts with previous
 1. Clone this repository:
 
     ```
-    git clone https://github.com/trailheadapps/dreamhouse-lwc
+    git clone https://github.com/COG-GTM/dreamhouse-lwc
     cd dreamhouse-lwc
     ```
 
@@ -187,27 +191,34 @@ This repository contains several files that are relevant if you want to integrat
 
 ### Code linting
 
-[ESLint](https://eslint.org/) is a popular JavaScript linting tool used to identify stylistic errors and erroneous constructs. To use ESLint with Visual Studio Code, install [this extension](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-vscode-lwc) from the Visual Studio Code Marketplace. The [.eslintignore](/.eslintignore) file is provided as part of this repository to exclude specific files from the linting process in the context of Lightning Web Components development.
+[ESLint](https://eslint.org/) is a popular JavaScript linting tool used to identify stylistic errors and erroneous constructs. To use ESLint with Visual Studio Code, install [this extension](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-vscode-lwc) from the Visual Studio Code Marketplace. The ESLint configuration for Lightning Web Components and Aura components is in [eslint.config.js](/eslint.config.js) (ESLint flat config), and [code-analyzer.yml](/code-analyzer.yml) points Salesforce Code Analyzer at it.
 
 ### Pre-commit hook
 
-This repository also comes with a [package.json](./package.json) file that makes it easy to set up a pre-commit hook that enforces code formatting and linting by running Prettier and ESLint every time you `git commit` changes.
+This repository also comes with a [package.json](./package.json) file that makes it easy to set up a pre-commit hook that enforces code formatting, linting and unit tests by running Prettier, ESLint and the related LWC Jest tests on staged files every time you `git commit` changes.
 
 To set up the formatting and linting pre-commit hook:
 
-1. Install [Node.js](https://nodejs.org) if you haven't already done so
+1. Install [Node.js](https://nodejs.org) if you haven't already done so (the project pins Node 22 with [Volta](https://volta.sh))
 1. Run `npm install` in your project's root folder to install the ESLint and Prettier modules (Note: Mac users should verify that Xcode command line tools are installed before running this command.)
 
-Prettier and ESLint will now run automatically every time you commit changes. The commit will fail if linting errors are detected. You can also run the formatting and linting from the command line using the following commands (check out [package.json](./package.json) for the full list):
+Prettier, ESLint and the related Jest tests will now run automatically every time you commit changes. The commit will fail if linting errors or failing tests are detected. You can also run the formatting, linting and LWC unit tests from the command line using the following commands (check out [package.json](./package.json) for the full list):
 
 ```
 npm run lint
 npm run prettier
+npm run test:unit
 ```
 
 ## Code Tours
 
-Code Tours are guided walkthroughs that will help you understand the app code better. To be able to run them, install the [CodeTour VSCode extension](https://marketplace.visualstudio.com/items?itemName=vsls-contrib.codetour).
+Code Tours are guided walkthroughs that will help you understand the app code better. To be able to run them, install the [CodeTour VSCode extension](https://marketplace.visualstudio.com/items?itemName=vsls-contrib.codetour). The tour is in [.tours/welcome-to-dreamhouse.tour](.tours/welcome-to-dreamhouse.tour).
+
+## Architecture
+
+[docs/architecture.md](docs/architecture.md) describes how the Dreamhouse pages, Lightning web components, message channels, Apex classes, flow, data model and external services fit together.
+
+[![Dreamhouse LWC architecture](docs/diagrams/architecture.png)](docs/architecture.md)
 
 ## Credits
 
