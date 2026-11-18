@@ -1,0 +1,118 @@
+// Dreamhouse LWC architecture, as deployed by force-app/ on main.
+// Render with ./render.sh (needs Graphviz: apt-get install graphviz fonts-dejavu).
+digraph dreamhouse {
+    graph [rankdir=LR, fontname="DejaVu Sans", fontsize=18, labelloc=t,
+           label="Dreamhouse LWC: what force-app/ deploys to a Salesforce org",
+           nodesep=0.35, ranksep=0.9, compound=true, bgcolor=white];
+    node  [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=15,
+           fillcolor="#eef4fb", color="#4a6fa5"];
+    edge  [fontname="DejaVu Sans", fontsize=12, color="#555555"];
+
+    user [label="Broker / user\n(Lightning Experience desktop,\nSalesforce mobile app)", shape=ellipse, fillcolor="#fff6d6", color="#b08900"];
+
+    subgraph cluster_app {
+        label="Dreamhouse Lightning app (applications/Dreamhouse, tabs/, flexipages/)";
+        style="rounded"; color="#4a6fa5"; fontsize=16;
+
+        subgraph cluster_explorer {
+            label="Property Explorer (app page)"; style="rounded,dashed";
+            pfilter1 [label="propertyFilter"];
+            ptilelist [label="propertyTileList\n+ paginator, propertyTile"];
+            pmap1 [label="propertyMap\n(lightning-map)"];
+            psummary1 [label="propertySummary"];
+            flowcmp [label="Create Property flow\n(flowruntime:interview)"];
+        }
+        subgraph cluster_finder {
+            label="Property Finder (app page)"; style="rounded,dashed";
+            pfilter2 [label="propertyFilter"];
+            plistmap [label="propertyListMap\n(Leaflet map)"];
+            psummary2 [label="propertySummary"];
+            dom2 [label="daysOnMarket"];
+            barcode [label="barcodeScanner\n(mobile)"];
+        }
+        subgraph cluster_record {
+            label="Property record page"; style="rounded,dashed";
+            carousel [label="propertyCarousel\n(photos + upload)"];
+            plocation [label="propertyLocation\n(distance, mobile GPS)"];
+            rec_other [label="propertyMap, brokerCard,\ndaysOnMarket"];
+        }
+        subgraph cluster_settings {
+            label="Settings (app page)"; style="rounded,dashed";
+            importer [label="sampleDataImporter"];
+        }
+    }
+
+    subgraph cluster_lms {
+        label="Lightning Message Service (messageChannels/)"; style="rounded"; color="#7a4fa5";
+        node [shape=cds, fillcolor="#f3ecfa", color="#7a4fa5"];
+        filters_mc [label="FiltersChange__c"];
+        selected_mc [label="PropertySelected__c"];
+    }
+
+    subgraph cluster_server {
+        label="Salesforce platform (server side)"; style="rounded"; color="#2e7d32";
+        node [fillcolor="#e9f5ea", color="#2e7d32"];
+        lds [label="Lightning Data Service\n(uiRecordApi getRecord,\nlightning-record-form)"];
+        propctl [label="PropertyController\ngetPagedPropertyList -> PagedResult\ngetPictures"];
+        fileutil [label="FileUtilities.createFile"];
+        sampledata [label="SampleDataController\n.importSampleData"];
+        flow [label="Create_property flow\n(screen flow)"];
+        geocode [label="GeocodingService\n(@InvocableMethod, callout)"];
+        subgraph cluster_data {
+            label="Data"; style="rounded,dashed"; color="#2e7d32";
+            node [shape=cylinder, fillcolor="white"];
+            objects [label="Property__c --lookup--> Broker__c\nContact, Case"];
+            files [label="ContentVersion /\nContentDocumentLink"];
+            statres [label="Static resources\nsample_data_*.json, leafletjs"];
+        }
+    }
+
+    subgraph cluster_ext {
+        label="External services (cspTrustedSites/, remoteSiteSettings/)"; style="rounded"; color="#a54a4a";
+        node [fillcolor="#fbeeee", color="#a54a4a"];
+        nominatim [label="Nominatim geocoding\nnominatim.openstreetmap.org"];
+        tiles [label="OSM map tiles\ntile.openstreetmap.org"];
+        s3 [label="Property and broker photos\ns3-us-west-2.amazonaws.com"];
+    }
+
+    user -> pfilter1 [label="  uses"];
+    user -> pfilter2;
+
+    // Lightning Message Service
+    pfilter1 -> filters_mc [label="publish"];
+    pfilter2 -> filters_mc;
+    ptilelist -> filters_mc [dir=back, label="subscribe"];
+    plistmap -> filters_mc [dir=back];
+    ptilelist -> selected_mc [label="publish"];
+    plistmap -> selected_mc;
+    pmap1 -> selected_mc [dir=back, label="subscribe"];
+    psummary1 -> selected_mc [dir=back];
+    psummary2 -> selected_mc [dir=back];
+    dom2 -> selected_mc [dir=back];
+
+    // Apex and LDS
+    ptilelist -> propctl [label="@wire"];
+    plistmap -> propctl;
+    carousel -> propctl [label="getPictures"];
+    carousel -> fileutil [label="upload"];
+    importer -> sampledata;
+    flowcmp -> flow;
+    flow -> geocode [label="Geocode Address"];
+    psummary1 -> lds [style=dashed, label="record data"];
+    rec_other -> lds [style=dashed];
+    plocation -> lds [style=dashed];
+
+    propctl -> objects [label="SOQL\nWITH USER_MODE"];
+    propctl -> files;
+    fileutil -> files;
+    sampledata -> statres [label="read"];
+    sampledata -> objects [label="delete + insert"];
+    flow -> objects [label="create, set picture"];
+    lds -> objects;
+
+    // External calls
+    geocode -> nominatim [label="HTTP GET"];
+    plistmap -> tiles [label="tiles", style=dashed];
+    psummary2 -> s3 [label="<img> URLs", style=dashed];
+
+}
