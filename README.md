@@ -98,7 +98,7 @@ Dreamhouse is a sample application that demonstrates the unique value propositio
 
 1. In App Launcher, select the **Dreamhouse** app.
 
-> Tip: [bin/install-scratch.sh](bin/install-scratch.sh) (or [bin/install-scratch.bat](bin/install-scratch.bat) on Windows) runs the scratch org creation, deploy, permission set and sample data steps above in one go, then opens the Property Explorer tab. It deletes any existing scratch org with the **dreamhouse** alias first.
+> Tip: [bin/install-scratch.sh](bin/install-scratch.sh) (or [bin/install-scratch.bat](bin/install-scratch.bat) on Windows) runs the scratch org creation, deploy, permission set and sample data steps above in one go, then opens the Property Explorer tab. It deletes any existing scratch org with the **dreamhouse** alias first. Run the shell script from any directory; run the Windows script from inside the `bin` folder, because it changes to the parent of the current directory.
 
 ## Installing Dreamhouse using an Unlocked Package
 
